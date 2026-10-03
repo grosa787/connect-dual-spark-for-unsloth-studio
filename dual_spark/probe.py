@@ -12,6 +12,7 @@ import socket
 from typing import Callable
 
 from .discovery import Link, candidate_links, peer_candidates, route_uses_link
+from .language import msg
 
 
 @dataclass(frozen=True)
@@ -48,10 +49,10 @@ def _tcp_ssh_open(local_ip: str, remote_ip: str) -> bool:
 def _scan_link(link: Link) -> list[str]:
     """Probe SSH only on a directly connected /24-or-smaller cluster subnet."""
     if link.network.num_addresses > 256:
-        raise RuntimeError(
-            f"No peer in neighbor table for {link.interface}; subnet {link.network} "
-            "is too large for automatic discovery"
-        )
+        raise RuntimeError(msg(
+            f"No peer in neighbor table for {link.interface}; subnet {link.network} is too large for automatic discovery",
+            f"В таблице соседей интерфейса {link.interface} нет второго Spark; подсеть {link.network} слишком велика для автоматического поиска",
+        ))
     candidates = [str(ip) for ip in link.network.hosts() if str(ip) != link.address]
     found = []
     with ThreadPoolExecutor(max_workers=32) as pool:
@@ -120,10 +121,10 @@ class ClusterProbe:
                     pass
         links = candidate_links(addresses_json, speeds)
         if not links:
-            raise RuntimeError(
-                "No active ConnectX-7 link with a private IPv4 address and "
-                "at least 100 Gb/s; check the QSFP cable and NVIDIA Sync cluster"
-            )
+            raise RuntimeError(msg(
+                "No active ConnectX-7 link with a private IPv4 address and at least 100 Gb/s; check the QSFP cable and NVIDIA Sync cluster",
+                "Не найдено активное соединение ConnectX-7 с частным IPv4-адресом и скоростью не ниже 100 Гбит/с; проверьте кабель QSFP и кластер NVIDIA Sync",
+            ))
 
         verified = []
         for link in links:
@@ -136,13 +137,13 @@ class ClusterProbe:
 
         hostnames = {peer.hostname for peer in verified}
         if not verified:
-            raise RuntimeError(
-                "ConnectX-7 is up, but no second Spark passed passwordless SSH "
-                "and return-route checks. Run NVIDIA Sync Cluster Assistant first."
-            )
+            raise RuntimeError(msg(
+                "ConnectX-7 is up, but no second Spark passed passwordless SSH and return-route checks. Run NVIDIA Sync Cluster Assistant first.",
+                "ConnectX-7 работает, но второй Spark не прошёл проверки беспарольного SSH и обратного маршрута. Сначала настройте кластер через NVIDIA Sync Cluster Assistant.",
+            ))
         if len(hostnames) != 1:
-            raise RuntimeError(
-                f"More than one peer was discovered ({', '.join(sorted(hostnames))}); "
-                "this installer supports exactly two Sparks"
-            )
+            raise RuntimeError(msg(
+                f"More than one peer was discovered ({', '.join(sorted(hostnames))}); this installer supports exactly two Sparks",
+                f"Обнаружено больше одного второго Spark ({', '.join(sorted(hostnames))}); установщик поддерживает ровно два Spark",
+            ))
         return verified[0]

@@ -17,7 +17,7 @@ if [[ "${1:-}" == '-h' || "${1:-}" == '--help' ]]; then
     exit 0
 fi
 
-for command_name in dpkg dpkg-deb install sed mktemp; do
+for command_name in dpkg dpkg-deb install python3 sed mktemp; do
     command -v "$command_name" >/dev/null 2>&1 || {
         printf 'Required command not found: %s\n' "$command_name" >&2
         exit 1
@@ -27,7 +27,9 @@ done
 for source_path in \
     "$project_root/dual_spark/__init__.py" \
     "$project_root/dual_spark/cli.py" \
+    "$project_root/dual_spark/language.py" \
     "$project_root/README.md" \
+    "$project_root/README.ru.md" \
     "$project_root/LICENSE" \
     "$project_root/packaging/connect-dual-spark" \
     "$project_root/packaging/connect-dual-spark.desktop" \
@@ -72,6 +74,7 @@ find "$app_dir/dual_spark" -type d -name __pycache__ -prune -exec rm -rf -- {} +
 find "$app_dir/dual_spark" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 find "$app_dir/dual_spark" -type d -exec chmod 0755 {} +
 find "$app_dir/dual_spark" -type f -exec chmod 0644 {} +
+PYTHONPATH="$app_dir" python3 -c 'import dual_spark.cli'
 
 install -m 0755 \
     "$project_root/packaging/connect-dual-spark" \
@@ -82,6 +85,9 @@ install -m 0644 \
 install -m 0644 \
     "$project_root/README.md" \
     "$package_root/usr/share/doc/connect-dual-spark/README.md"
+install -m 0644 \
+    "$project_root/README.ru.md" \
+    "$package_root/usr/share/doc/connect-dual-spark/README.ru.md"
 install -m 0644 \
     "$project_root/LICENSE" \
     "$package_root/usr/share/doc/connect-dual-spark/copyright"

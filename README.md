@@ -1,128 +1,143 @@
+[English](README.md) | [Русский](README.ru.md)
+
 # Connect Dual Spark for Unsloth Studio
 
-Connect Dual Spark автоматически находит прямое соединение ConnectX-7 между двумя NVIDIA DGX Spark, устанавливает Unsloth Studio и настраивает `llama.cpp` RPC для работы на втором Spark. Межузловой модельный трафик разрешается только через проверенный высокоскоростной интерфейс ConnectX-7.
+Connect Dual Spark automatically discovers the direct ConnectX-7 link between exactly two NVIDIA DGX Spark systems, installs Unsloth Studio, and configures `llama.cpp` RPC on the second Spark. Inter-node model traffic is allowed only over the verified high-speed ConnectX-7 interface.
 
-**English summary:** A one-launch Ubuntu ARM64 installer that connects exactly two NVIDIA DGX Spark systems for Unsloth Studio. It discovers the direct ConnectX-7 link, prepares `llama.cpp` RPC on the second Spark, and keeps inter-Spark model traffic on that link.
+> **Pre-release status:** The project passes automated static and package-structure checks, but a complete clean installation has not yet been validated on a physical pair of DGX Spark systems. Treat version 0.3.0 as a pre-release and test it on the target hardware before production use.
 
-## Что потребуется
+## Requirements
 
-- Ровно два NVIDIA DGX Spark с Ubuntu ARM64.
-- Физический QSFP-кабель между портами ConnectX-7 обоих Spark.
-- Кластер, заранее настроенный через [NVIDIA Sync Cluster Assistant](https://docs.nvidia.com/sync/latest/cluster-assistant.html).
-- Беспарольный SSH между узлами. Установщик определяет адрес и пользователя второго Spark автоматически; вводить их вручную не нужно.
-- Доступ в интернет для загрузки Unsloth и исходников `llama.cpp`.
-- Графический сеанс GNOME и GNOME Terminal для установщика и просмотра журнала. Сам worker RPC работает системной службой независимо от окна и входа пользователя.
-- Если Studio уже загружает модель через `llama-server`, сначала выгрузите её: установщик запускает отдельную короткую пробную модель и не прерывает текущий сеанс.
+- Exactly two NVIDIA DGX Spark systems running Ubuntu ARM64.
+- A physical QSFP cable between the ConnectX-7 ports on both systems.
+- A cluster configured in advance with [NVIDIA Sync Cluster Assistant](https://docs.nvidia.com/sync/latest/cluster-assistant.html).
+- Passwordless SSH between the nodes. The installer discovers the second Spark's address and user automatically; you do not enter them manually.
+- Internet access to download Unsloth and the `llama.cpp` sources.
+- A GNOME graphical session and GNOME Terminal for the installer and log viewer. The RPC worker itself runs as a system service, independently of any terminal window or user login.
+- If Studio is already loading a model through `llama-server`, unload it first. The installer starts a separate small test model and does not interrupt an active session.
 
-Во время установки система может запросить пароль `sudo` или подтверждение ОС на локальном либо втором Spark. Это отдельная системная авторизация; пароль для SSH между узлами запрашиваться не должен.
-Файл `.run` сам устанавливает недостающие базовые сетевые утилиты через Ubuntu APT; отдельная установка `.deb` для этого не требуется.
+During installation, the operating system may request a `sudo` password or confirmation on the local or second Spark. This is separate system authorization; SSH between the nodes should not request a password.
 
-## Быстрый запуск одного файла с рабочего стола
+The `.run` file installs missing basic networking tools through Ubuntu APT. You do not need to install the `.deb` package first.
 
-Скачайте из GitHub Releases один файл `Connect-Dual-Spark-arm64.run` на рабочий стол основного DGX Spark. Дополнительный каталог с исходниками рядом не нужен. Для необязательной проверки встроенного архива выполните:
+## Quick start: one file from the desktop
+
+Download the single `Connect-Dual-Spark-arm64.run` file from [GitHub Releases](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases) to the desktop of the primary DGX Spark. No adjacent source directory is required.
+
+Optionally verify the embedded archive first:
 
 ```bash
 bash "$(xdg-user-dir DESKTOP)/Connect-Dual-Spark-arm64.run" --verify
 ```
 
-Запуск установки — одна команда:
+Start the installer in English explicitly:
 
 ```bash
-bash "$(xdg-user-dir DESKTOP)/Connect-Dual-Spark-arm64.run"
+bash "$(xdg-user-dir DESKTOP)/Connect-Dual-Spark-arm64.run" --lang en
 ```
 
-Файл проверит встроенную контрольную сумму, распакует Python-модули во временный закрытый каталог и откроет GNOME Terminal. Временные файлы удаляются после закрытия окна установщика. Сам `.run` предназначен для Ubuntu ARM64 и не содержит адресов, имён пользователей или учётных данных.
-
-Если GNOME Terminal или графический сеанс недоступны, launcher выводит понятную ошибку. Во время установки в отдельном окне показывается журнал RPC; закрытие этого окна не остановит службу.
-
-## Запуск из исходников для разработки
-
-Файл `Connect-Dual-Spark.run` должен находиться рядом с каталогом `dual_spark`. В клонированном репозитории запустите:
+To use Russian instead:
 
 ```bash
-./Connect-Dual-Spark.run
+bash "$(xdg-user-dir DESKTOP)/Connect-Dual-Spark-arm64.run" --lang ru
 ```
 
-Откроется отдельное окно GNOME Terminal, и из корня проекта выполнится:
+`--lang auto` (also the default when omitted) checks `CONNECT_DUAL_SPARK_LANG=en` or `ru` first, then the system locale. Locales beginning with `ru` select Russian; all others select English. An explicit `--lang en` or `--lang ru` takes precedence. Setting `CONNECT_DUAL_SPARK_LANG=auto` leaves selection to the locale.
+
+The file verifies its embedded checksum, extracts the Python modules into a private temporary directory, and opens GNOME Terminal. The temporary files are removed after the installer window closes. The `.run` file is built for Ubuntu ARM64 and contains no addresses, usernames, or credentials.
+
+If GNOME Terminal or a graphical session is unavailable, the launcher reports a clear error. During installation, an additional window displays the RPC log; closing that window does not stop the service.
+
+## Run from source for development
+
+The `Connect-Dual-Spark.run` launcher must remain next to the `dual_spark` directory. From a cloned repository, run:
 
 ```bash
-python3 -m dual_spark.cli install
+./Connect-Dual-Spark.run --lang en
 ```
 
-Исходный launcher предназначен для разработки и требует каталог `dual_spark` рядом. Release-файл, собранный следующим способом, является самостоятельным.
-
-## Сборка release-файла `.run`
+It opens a separate GNOME Terminal window and runs the following command from the project root:
 
 ```bash
-./scripts/build_run.sh
+python3 -m dual_spark.cli --lang en install
+```
+
+The source launcher is intended for development and requires the adjacent `dual_spark` directory. The release file built below is self-contained.
+
+## Build the self-contained `.run` release
+
+```bash
+./scripts/build_run.sh 0.3.0
 ./dist/Connect-Dual-Spark-arm64.run --verify
 ```
 
-Сценарий включает текущий пакет `dual_spark`, удаляет кэш Python, добавляет SHA-256 встроенного архива и создаёт `dist/Connect-Dual-Spark-arm64.run`. Версию можно передать первым аргументом: `./scripts/build_run.sh 0.2.0`.
+The build script packages the current `dual_spark` module, removes Python caches, adds the embedded archive's SHA-256 digest, and creates `dist/Connect-Dual-Spark-arm64.run`. If the version argument is omitted, the package's current version is used.
 
-## Установка пакета `.deb`
+## Build and install the `.deb` package
 
-Пакет собирается для архитектуры `arm64`:
-
-```bash
-./scripts/build_deb.sh
-sudo apt install ./dist/connect-dual-spark_0.2.0_arm64.deb
-```
-
-Версию можно передать первым аргументом, например `./scripts/build_deb.sh 0.2.0`. После установки запустите **Connect Dual Spark** из меню приложений или выполните:
+The Debian package targets the `arm64` architecture:
 
 ```bash
-connect-dual-spark install
+./scripts/build_deb.sh 0.3.0
+sudo apt install ./dist/connect-dual-spark_0.3.0_arm64.deb
 ```
 
-## Этапы установки
-
-Терминальный интерфейс последовательно показывает состояние каждого этапа:
-
-1. Проверка ОС, архитектуры и необходимых системных команд.
-2. Поиск активного ConnectX-7 и единственного второго Spark.
-3. Проверка скорости линка, прямого маршрута в обе стороны и беспарольного SSH.
-4. Установка Unsloth Studio и сборка локального `llama-server` из управляемого клона `unslothai/llama.cpp` на основном Spark.
-5. Синхронизация того же исходного дерева через ConnectX-7 и сборка `llama.cpp` RPC на втором Spark.
-6. Установка системной службы RPC с автозапуском до входа пользователя, пробный запрос небольшой GGUF-модели с размещением весов на втором Spark и подтверждением активного RDMA, затем настройка Studio.
-7. Итоговая проверка установки.
-
-Предложение запустить Unsloth Studio появляется только после успешного завершения всех этапов. При ошибке процесс останавливается с диагностикой и не переключает RPC на другой сетевой интерфейс.
-
-## Команды
+After installation, launch **Connect Dual Spark** from the application menu or run:
 
 ```bash
-connect-dual-spark install
-connect-dual-spark check
-connect-dual-spark start-rpc
-connect-dual-spark studio
-connect-dual-spark status
+connect-dual-spark --lang en install
 ```
 
-- `install` выполняет полную настройку и после проверок предлагает запустить Studio.
-- `check` только проверяет окружение, линк, маршрут и SSH; пакеты и конфигурация не изменяются.
-- `start-rpc` проверяет системную службу RPC, при необходимости запускает её и открывает окно журнала.
-- `studio` проверяет текущий CX7/RPC и запускает именно настроенную службу Studio. Используйте эту команду после установки, в том числе из того же терминала, где шёл установщик.
-- `status` показывает состояние линка, RPC и конфигурации Studio.
+## Installation stages
 
-После восстановления питания RPC второго Spark запускается автоматически как системная служба `connect-dual-spark-rpc.service` с `WantedBy=multi-user.target` и `Restart=always`; вход пользователя на втором Spark не нужен. На основном Spark проверьте состояние командой `connect-dual-spark status` и при необходимости запустите Studio командой `connect-dual-spark studio`. Если питание пропало во время работы модели, после восстановления соединения модель может потребовать повторной загрузки в Studio. Переменные окружения для обычных новых терминалов также сохраняются в `.bashrc` и `environment.d`. Повторный `install` проверяет и восстанавливает ту же управляемую конфигурацию; он не выполняет `git pull` и не обновляет версии исходников автоматически.
+The terminal interface reports each stage in order:
 
-## Гарантия маршрута через ConnectX-7
+1. Check the operating system, architecture, and required system commands.
+2. Find the active ConnectX-7 interface and the only eligible second Spark.
+3. Verify link speed, the direct route in both directions, and passwordless SSH.
+4. Install Unsloth Studio and build the local `llama-server` from the managed `unslothai/llama.cpp` clone on the primary Spark.
+5. Synchronize the same source tree over ConnectX-7 and build `llama.cpp` RPC on the second Spark.
+6. Install the RPC system service so it starts at boot before any user login, run a small GGUF model with weights placed on the second Spark, confirm active RDMA, and configure Studio.
+7. Perform the final installation checks.
 
-Установщик не принимает адрес из Wi-Fi, обычного Ethernet или управляющей сети. Он выбирает только активный ConnectX-7 с приватным IPv4-адресом и скоростью не ниже 100 Гбит/с, а затем проверяет исходящий и обратный маршруты.
+The installer offers to launch Unsloth Studio only after every stage succeeds. On failure, it stops with diagnostics and never switches RPC to another network interface.
 
-RPC привязывается к адресу ConnectX-7 второго Spark, а Studio получает именно этот адрес через `LLAMA_ARG_RPC`. Установщик также задаёт `UNSLOTH_LLAMA_CPP_PATH` для сервиса Studio, shell и `environment.d`, чтобы Studio использовала собранный локальный `llama.cpp`. Если проверенный маршрут исчезает, установка или проверка завершается ошибкой; автоматического перехода модельного трафика на медленную сеть нет. Интернет-загрузки и другой внешний трафик могут продолжать использовать обычное подключение.
+## Commands and interface language
 
-RPC-протокол `llama.cpp` не следует выставлять в публичную или недоверенную сеть. Оставляйте подсеть ConnectX-7 изолированной и не публикуйте RPC-порт на управляющих интерфейсах.
+```bash
+connect-dual-spark --lang en install
+connect-dual-spark --lang en check
+connect-dual-spark --lang en start-rpc
+connect-dual-spark --lang en studio
+connect-dual-spark --lang en status
+```
 
-## Если проверка не проходит
+- `install` performs the complete setup and offers to launch Studio after all checks pass.
+- `check` only verifies the environment, link, route, and SSH; it does not modify packages or configuration.
+- `start-rpc` checks the RPC system service, starts it when necessary, and opens a log window.
+- `studio` verifies the current ConnectX-7 link and RPC configuration, then starts the configured Studio service. Use it after installation, including from the terminal that ran the installer.
+- `status` reports the link, RPC, and Studio configuration state.
 
-Запустите `connect-dual-spark check` и устраните первую показанную ошибку. Обычно нужно проверить посадку QSFP-кабеля, повторить настройку кластера через NVIDIA Sync и убедиться, что беспарольный SSH работает между двумя узлами. Установщик намеренно не просит вручную вводить адрес или имя пользователя и останавливается, если на линке найдено больше одного подходящего узла.
+`--lang en` forces English, `--lang ru` forces Russian, and `--lang auto` checks `CONNECT_DUAL_SPARK_LANG` before the system locale. The option works before or after the command, for example `connect-dual-spark status --lang ru`. If the option is omitted, auto selection is used. This setting localizes the installer's own prompts, progress, and status messages; diagnostics printed by operating-system commands or third-party tools may remain in English.
 
-## Официальная документация
+After a power cycle, RPC on the second Spark starts automatically as the system service `connect-dual-spark-rpc.service`, with `WantedBy=multi-user.target` and `Restart=always`. No user needs to log in on the second Spark. On the primary Spark, check the state with `connect-dual-spark status` and start Studio with `connect-dual-spark studio` when needed. If power was lost while a model was running, the model may need to be loaded again after connectivity returns.
+
+Environment variables for ordinary new terminals are also saved in `.bashrc` and `environment.d`. Running `install` again checks and repairs the same managed configuration; it does not run `git pull` or update source versions automatically.
+
+## ConnectX-7 route guarantee
+
+The installer rejects addresses from Wi-Fi, ordinary Ethernet, and management networks. It selects only an active ConnectX-7 interface with a private IPv4 address and negotiated speed of at least 100 Gbit/s, then verifies both outbound and return routes.
+
+RPC binds to the second Spark's ConnectX-7 address, and Studio receives exactly that address through `LLAMA_ARG_RPC`. The installer also sets `UNSLOTH_LLAMA_CPP_PATH` for the Studio service, shell, and `environment.d`, ensuring that Studio uses the locally built `llama.cpp`. If the verified route disappears, installation or validation fails; model traffic does not automatically fall back to a slower network. Internet downloads and other external traffic may continue to use the regular connection.
+
+Do not expose the `llama.cpp` RPC protocol to a public or untrusted network. Keep the ConnectX-7 subnet isolated and do not publish the RPC port on management interfaces.
+
+## Troubleshooting failed checks
+
+Run `connect-dual-spark check` and fix the first reported error. Common causes are a QSFP cable that is not fully seated, incomplete cluster configuration in NVIDIA Sync, or passwordless SSH that does not work between the nodes. The installer intentionally does not ask for an address or username and stops if more than one eligible peer is found on the link.
+
+## Official documentation
 
 - [NVIDIA Sync Cluster Assistant](https://docs.nvidia.com/sync/latest/cluster-assistant.html)
 - [`llama.cpp` RPC](https://github.com/ggml-org/llama.cpp/blob/master/tools/rpc/README.md)
 - [Unsloth](https://github.com/unslothai/unsloth/blob/main/README.md)
-
-Проект проходит статические проверки сценариев и структуры пакета. Полная установка на чистой паре DGX Spark должна проверяться на целевом оборудовании перед использованием в рабочей среде.

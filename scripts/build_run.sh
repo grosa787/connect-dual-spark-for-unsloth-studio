@@ -32,7 +32,7 @@ if [[ "${1:-}" == '-h' || "${1:-}" == '--help' ]]; then
     exit 0
 fi
 
-for command_name in awk cat chmod cp find grep head install mktemp sed tar tail; do
+for command_name in awk cat chmod cp find grep head install mktemp python3 sed tar tail; do
     command -v "$command_name" >/dev/null 2>&1 || \
         fail "required command not found: $command_name"
 done
@@ -40,6 +40,7 @@ done
 for source_path in \
     "$project_root/dual_spark/__init__.py" \
     "$project_root/dual_spark/cli.py" \
+    "$project_root/dual_spark/language.py" \
     "$project_root/packaging/run-header.sh.in"; do
     [[ -f "$source_path" ]] || fail "required source file not found: $source_path"
 done
@@ -73,6 +74,7 @@ find "$payload_root/dual_spark" -type d -name __pycache__ -prune -exec rm -rf --
 find "$payload_root/dual_spark" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 find "$payload_root/dual_spark" -type d -exec chmod 0755 {} +
 find "$payload_root/dual_spark" -type f -exec chmod 0644 {} +
+PYTHONPATH="$payload_root" python3 -c 'import dual_spark.cli'
 
 COPYFILE_DISABLE=1 tar -C "$payload_root" -czf "$archive_path" dual_spark
 tar -tzf "$archive_path" >/dev/null

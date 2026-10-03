@@ -6,6 +6,34 @@ package_version='@PACKAGE_VERSION@'
 payload_sha256='@PAYLOAD_SHA256@'
 payload_marker='__CONNECT_DUAL_SPARK_PAYLOAD_BELOW__'
 work_dir=''
+language_choice=auto
+language=en
+
+select_language() {
+    case "$language_choice" in
+        en|ru) language=$language_choice ;;
+        auto)
+            local override="${CONNECT_DUAL_SPARK_LANG:-}"
+            override="$(printf '%s' "$override" | tr '[:upper:]' '[:lower:]')"
+            case "$override" in
+                en|ru) language=$override ;;
+                *)
+                    local selected_locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
+                    selected_locale="$(printf '%s' "$selected_locale" | tr '[:upper:]' '[:lower:]')"
+                    case "$selected_locale" in
+                        ru|ru_*|ru-*|ru.*|ru@*) language=ru ;;
+                        *) language=en ;;
+                    esac
+                    ;;
+            esac
+            ;;
+        *) fail "$(localized "Unsupported language: $language_choice" "Неподдерживаемый язык: $language_choice")" ;;
+    esac
+}
+
+localized() {
+    if [[ "$language" == ru ]]; then printf '%s' "$2"; else printf '%s' "$1"; fi
+}
 
 fail() {
     printf 'Connect Dual Spark: %s\n' "$1" >&2
@@ -20,14 +48,27 @@ cleanup() {
 trap cleanup EXIT
 
 usage() {
-    cat <<EOF
+    if [[ "$language" == ru ]]; then
+        cat <<EOF
+Connect Dual Spark for Unsloth Studio ${package_version}
+
+Использование:
+  ${0##*/}                 проверить архив и запустить установщик
+  ${0##*/} --lang en|ru|auto  выбрать язык установщика
+  ${0##*/} --verify       проверить встроенный архив без установки
+  ${0##*/} --version      показать версию
+EOF
+    else
+        cat <<EOF
 Connect Dual Spark for Unsloth Studio ${package_version}
 
 Usage:
   ${0##*/}            verify, unpack, and start the installer
+  ${0##*/} --lang en|ru|auto  choose the installer language
   ${0##*/} --verify   verify the embedded payload without installing
   ${0##*/} --version  print the embedded version
 EOF
+    fi
 }
 
 sha256_file() {
@@ -36,7 +77,7 @@ sha256_file() {
     elif command -v shasum >/dev/null 2>&1; then
         shasum -a 256 "$1" | awk '{print $1}'
     else
-        fail 'не найдена команда sha256sum или shasum.'
+        fail "$(localized 'sha256sum or shasum was not found.' 'не найдена команда sha256sum или shasum.')"
     fi
 }
 
@@ -54,7 +95,7 @@ extract_payload() {
     local self_path payload_line archive_path listing_path actual_sha
     self_path="$(resolve_self)"
     payload_line="$(awk -v marker="$payload_marker" '$0 == marker { print NR + 1; exit }' "$self_path")"
-    [[ -n "$payload_line" ]] || fail 'встроенный архив не найден.'
+    [[ -n "$payload_line" ]] || fail "$(localized 'Embedded archive was not found.' 'встроенный архив не найден.')"
 
     work_dir="$(mktemp -d "${TMPDIR:-/tmp}/connect-dual-spark.XXXXXXXX")"
     archive_path="$work_dir/payload.tar.gz"
@@ -63,21 +104,21 @@ extract_payload() {
 
     actual_sha="$(sha256_file "$archive_path")"
     [[ "$actual_sha" == "$payload_sha256" ]] || \
-        fail 'контрольная сумма встроенного архива не совпадает.'
+        fail "$(localized 'Embedded archive checksum does not match.' 'контрольная сумма встроенного архива не совпадает.')"
 
     tar -tzf "$archive_path" > "$listing_path" || \
-        fail 'встроенный архив повреждён.'
+        fail "$(localized 'Embedded archive is damaged.' 'встроенный архив повреждён.')"
     if awk '
         /^\// || $0 == ".." || /^\.\.\// || /\/\.\.\// || /\/\.\.$/ { unsafe = 1 }
         END { exit unsafe ? 0 : 1 }
     ' "$listing_path"; then
-        fail 'встроенный архив содержит небезопасный путь.'
+        fail "$(localized 'Embedded archive contains an unsafe path.' 'встроенный архив содержит небезопасный путь.')"
     fi
 
     mkdir -m 0700 "$work_dir/payload"
     tar -xzf "$archive_path" -C "$work_dir/payload"
     [[ -f "$work_dir/payload/dual_spark/cli.py" ]] || \
-        fail 'встроенный архив не содержит dual_spark/cli.py.'
+        fail "$(localized 'Embedded archive is missing dual_spark/cli.py.' 'встроенный архив не содержит dual_spark/cli.py.')"
 }
 
 run_installer() {
@@ -85,11 +126,11 @@ run_installer() {
     local result_file="$work_dir/installer.status"
     local terminal_status installer_status
 
-    command -v python3 >/dev/null 2>&1 || fail 'python3 не найден.'
+    command -v python3 >/dev/null 2>&1 || fail "$(localized 'python3 was not found.' 'python3 не найден.')"
     command -v gnome-terminal >/dev/null 2>&1 || \
-        fail 'для установки и просмотра журнала RPC требуется GNOME Terminal.'
+        fail "$(localized 'GNOME Terminal is required to install and view RPC logs.' 'для установки и просмотра журнала RPC требуется GNOME Terminal.')"
     [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]] || \
-        fail 'графический сеанс GNOME не найден; запустите файл на рабочем столе DGX Spark.'
+        fail "$(localized 'No GNOME desktop session found; run this file on the DGX Spark desktop.' 'графический сеанс GNOME не найден; запустите файл на рабочем столе DGX Spark.')"
 
     set +e
     gnome-terminal \
@@ -99,39 +140,84 @@ run_installer() {
         bash -c '
             payload_dir=$1
             result_file=$2
+            chosen_language=$3
             cd -- "$payload_dir" || exit 1
             PYTHONPATH="$payload_dir${PYTHONPATH:+:$PYTHONPATH}" \
-                python3 -m dual_spark.cli install
+                python3 -m dual_spark.cli --lang "$chosen_language" install
             installer_status=$?
             printf "%s\n" "$installer_status" > "$result_file"
-            printf "\nConnect Dual Spark завершил работу (код %s).\n" "$installer_status"
-            printf "Нажмите Enter, чтобы закрыть окно."
+            if [[ "$chosen_language" == ru ]]; then
+                printf "\nConnect Dual Spark завершил работу (код %s).\n" "$installer_status"
+                printf "Нажмите Enter, чтобы закрыть окно."
+            else
+                printf "\nConnect Dual Spark finished (exit code %s).\n" "$installer_status"
+                printf "Press Enter to close this window."
+            fi
             read -r _
             exit "$installer_status"
-        ' connect-dual-spark "$payload_dir" "$result_file"
+        ' connect-dual-spark "$payload_dir" "$result_file" "$language"
     terminal_status=$?
     set -e
 
     [[ -f "$result_file" ]] || \
-        fail "GNOME Terminal завершился до запуска установщика (код $terminal_status)."
+        fail "$(localized "GNOME Terminal exited before the installer started (code $terminal_status)." "GNOME Terminal завершился до запуска установщика (код $terminal_status).")"
     installer_status="$(<"$result_file")"
     [[ "$installer_status" =~ ^[0-9]+$ ]] || \
-        fail 'установщик вернул некорректный код завершения.'
+        fail "$(localized 'Installer returned an invalid exit status.' 'установщик вернул некорректный код завершения.')"
     return "$installer_status"
 }
 
 main() {
-    case "${1:-}" in
-        '') ;;
+    local action=install
+    local previous=''
+    local argument
+    for argument in "$@"; do
+        if [[ "$previous" == --lang ]]; then
+            language_choice=$argument
+            previous=''
+            continue
+        fi
+        case "$argument" in
+            --lang) previous=--lang ;;
+            --lang=*) language_choice=${argument#--lang=} ;;
+        esac
+    done
+    select_language
+    while (( $# )); do
+        case "$1" in
+            --lang)
+                [[ $# -ge 2 ]] || fail "$(localized '--lang requires en, ru, or auto.' 'После --lang укажите en, ru или auto.')"
+                language_choice=$2
+                shift 2
+                ;;
+            --lang=*)
+                language_choice=${1#--lang=}
+                shift
+                ;;
+            --verify|--version|-h|--help)
+                [[ "$action" == install ]] || { usage >&2; return 2; }
+                action=$1
+                shift
+                ;;
+            *)
+                usage >&2
+                return 2
+                ;;
+        esac
+    done
+    case "$action" in
         --verify)
-            [[ $# -eq 1 ]] || { usage >&2; return 2; }
             extract_payload
-            printf 'OK: Connect Dual Spark %s, payload SHA-256 %s\n' \
-                "$package_version" "$payload_sha256"
+            if [[ "$language" == ru ]]; then
+                printf 'Проверено: Connect Dual Spark %s, SHA-256 встроенного архива %s\n' \
+                    "$package_version" "$payload_sha256"
+            else
+                printf 'OK: Connect Dual Spark %s, payload SHA-256 %s\n' \
+                    "$package_version" "$payload_sha256"
+            fi
             return 0
             ;;
         --version)
-            [[ $# -eq 1 ]] || { usage >&2; return 2; }
             printf '%s\n' "$package_version"
             return 0
             ;;
@@ -139,17 +225,13 @@ main() {
             usage
             return 0
             ;;
-        *)
-            usage >&2
-            return 2
-            ;;
     esac
 
     [[ "$(uname -s)" == 'Linux' ]] || \
-        fail 'установка поддерживается только на Ubuntu ARM64.'
+        fail "$(localized 'Installation requires Ubuntu ARM64.' 'установка поддерживается только на Ubuntu ARM64.')"
     case "$(uname -m)" in
         aarch64|arm64) ;;
-        *) fail 'установка поддерживается только на ARM64 DGX Spark.' ;;
+        *) fail "$(localized 'Installation requires an ARM64 DGX Spark.' 'установка поддерживается только на ARM64 DGX Spark.')" ;;
     esac
 
     extract_payload

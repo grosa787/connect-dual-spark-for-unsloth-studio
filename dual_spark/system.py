@@ -8,6 +8,8 @@ import subprocess
 import sys
 import time
 
+from .language import msg
+
 
 class CommandFailure(RuntimeError):
     pass
@@ -43,13 +45,14 @@ class Runner:
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             self._record(args, str(exc))
-            raise CommandFailure(f"Could not run {args[0]}: {exc}") from exc
+            raise CommandFailure(msg(f"Could not run {args[0]}: {exc}", f"Не удалось запустить {args[0]}: {exc}")) from exc
         self._record(args, result.stdout + result.stderr)
         if result.returncode:
             detail = (result.stderr or result.stdout).strip().splitlines()[-3:]
-            raise CommandFailure(
-                f"{args[0]} exited with {result.returncode}: {' | '.join(detail)}"
-            )
+            raise CommandFailure(msg(
+                f"{args[0]} exited with {result.returncode}: {' | '.join(detail)}",
+                f"Команда {args[0]} завершилась с кодом {result.returncode}: {' | '.join(detail)}",
+            ))
         return result.stdout
 
     def run_task(self, args, *, label, timeout=3600, env=None, cwd=None):
@@ -76,31 +79,34 @@ class Runner:
                             proc.wait(timeout=10)
                         except subprocess.TimeoutExpired:
                             proc.kill()
-                        raise CommandFailure(f"{label} timed out after {timeout}s")
+                        raise CommandFailure(msg(f"{label} timed out after {timeout}s", f"Превышено время ожидания задачи «{label}»: {timeout} с"))
                     time.sleep(1)
         except OSError as exc:
-            raise CommandFailure(f"Could not start {label}: {exc}") from exc
+            raise CommandFailure(msg(f"Could not start {label}: {exc}", f"Не удалось начать задачу «{label}»: {exc}")) from exc
         if sys.stdout.isatty():
             print("\r" + " " * 72 + "\r", end="", flush=True)
         if proc.returncode:
             tail = self.log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-12:]
-            raise CommandFailure(
-                f"{label} failed (exit {proc.returncode}). Log: {self.log_path}\n"
-                + "\n".join(tail)
-            )
+            raise CommandFailure(msg(
+                f"{label} failed (exit {proc.returncode}). Log: {self.log_path}\n",
+                f"Задача «{label}» завершилась с ошибкой (код {proc.returncode}). Журнал: {self.log_path}\n",
+            ) + "\n".join(tail))
         if self.verbose:
             print("\n".join(self.log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-8:]))
 
     def run_interactive(self, args, *, label):
         args = [str(arg) for arg in args]
         self._record(args)
-        print(f"    {label}: системный запрос прав доступа может появиться ниже.", flush=True)
+        print(msg(
+            f"    {label}: an operating-system authorization prompt may appear below.",
+            f"    {label}: системный запрос прав доступа может появиться ниже.",
+        ), flush=True)
         try:
             result = subprocess.run(args, stdin=sys.stdin)
         except OSError as exc:
-            raise CommandFailure(f"Could not run {label}: {exc}") from exc
+            raise CommandFailure(msg(f"Could not run {label}: {exc}", f"Не удалось запустить задачу «{label}»: {exc}")) from exc
         if result.returncode:
-            raise CommandFailure(f"{label} failed (exit {result.returncode})")
+            raise CommandFailure(msg(f"{label} failed (exit {result.returncode})", f"Задача «{label}» завершилась с ошибкой (код {result.returncode})"))
 
 
 def remote_ssh(peer, command, *, tty=False):

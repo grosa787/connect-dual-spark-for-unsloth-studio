@@ -2,27 +2,70 @@
 set -Eeuo pipefail
 
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+language_choice=auto
+language=en
+invalid_args=false
 
 fail() {
     printf 'Connect Dual Spark: %s\n' "$1" >&2
     exit 1
 }
 
-command -v python3 >/dev/null 2>&1 || fail 'python3 не найден.'
-command -v gnome-terminal >/dev/null 2>&1 || fail 'GNOME Terminal не найден.'
+localized() {
+    if [[ "$language" == ru ]]; then printf '%s' "$2"; else printf '%s' "$1"; fi
+}
+
+case "${1:-}" in
+    '') ;;
+    --lang)
+        language_choice=${2:-auto}
+        [[ $# -eq 2 ]] || invalid_args=true
+        ;;
+    --lang=*)
+        language_choice=${1#--lang=}
+        [[ $# -eq 1 ]] || invalid_args=true
+        ;;
+    *) invalid_args=true ;;
+esac
+
+case "$language_choice" in
+    en|ru) language=$language_choice ;;
+    auto)
+        override="$(printf '%s' "${CONNECT_DUAL_SPARK_LANG:-}" | tr '[:upper:]' '[:lower:]')"
+        case "$override" in
+            en|ru) language=$override ;;
+            *)
+                selected_locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
+                selected_locale="$(printf '%s' "$selected_locale" | tr '[:upper:]' '[:lower:]')"
+                case "$selected_locale" in ru|ru_*|ru-*|ru.*|ru@*) language=ru ;; *) language=en ;; esac
+                ;;
+        esac
+        ;;
+    *) fail "$(localized "Unsupported language: $language_choice" "Неподдерживаемый язык: $language_choice")" ;;
+esac
+
+[[ "$invalid_args" == false ]] || fail "$(localized 'Usage: Connect-Dual-Spark.run [--lang en|ru|auto]' 'Использование: Connect-Dual-Spark.run [--lang en|ru|auto]')"
+command -v python3 >/dev/null 2>&1 || fail "$(localized 'python3 was not found.' 'python3 не найден.')"
+command -v gnome-terminal >/dev/null 2>&1 || fail "$(localized 'GNOME Terminal was not found.' 'GNOME Terminal не найден.')"
 [[ -f "$project_dir/dual_spark/cli.py" ]] || \
-    fail 'рядом с launcher отсутствует dual_spark/cli.py.'
+    fail "$(localized 'dual_spark/cli.py is missing beside this launcher.' 'рядом с launcher отсутствует dual_spark/cli.py.')"
 
 exec gnome-terminal \
     --title=Connect-Dual-Spark \
     -- \
     bash -c '
         project_dir=$1
+        language=$2
         cd -- "$project_dir" || exit 1
-        python3 -m dual_spark.cli install
+        python3 -m dual_spark.cli --lang "$language" install
         status=$?
-        printf "\nConnect Dual Spark завершил работу (код %s).\n" "$status"
-        printf "Нажмите Enter, чтобы закрыть окно."
+        if [[ "$language" == ru ]]; then
+            printf "\nConnect Dual Spark завершил работу (код %s).\n" "$status"
+            printf "Нажмите Enter, чтобы закрыть окно."
+        else
+            printf "\nConnect Dual Spark finished (exit code %s).\n" "$status"
+            printf "Press Enter to close this window."
+        fi
         read -r _
         exit "$status"
-    ' connect-dual-spark "$project_dir"
+    ' connect-dual-spark "$project_dir" "$language"

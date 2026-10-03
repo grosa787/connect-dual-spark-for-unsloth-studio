@@ -13,6 +13,7 @@ import time
 from urllib import request
 
 from .configuration import bashrc_with_rpc, rpc_command, rpc_system_unit, studio_unit
+from .language import msg
 from .probe import ClusterProbe
 from .system import CommandFailure, remote_cmd, remote_ssh
 
@@ -73,26 +74,26 @@ class Installer:
         if not missing:
             return
         if not shutil.which("sudo") or not shutil.which("apt-get"):
-            raise RuntimeError("Missing base tools and cannot install them without sudo and apt-get")
-        print("    Installing missing base tools: " + ", ".join(missing))
+            raise RuntimeError(msg("Missing base tools and cannot install them without sudo and apt-get", "Не хватает системных утилит; установить их без sudo и apt-get невозможно"))
+        print(msg("    Installing missing base tools: ", "    Установка недостающих системных утилит: ") + ", ".join(missing))
         apt = "set -e; log=$(mktemp); trap 'rm -f \"$log\"' EXIT; if ! (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y " + shlex.join(missing) + ") >\"$log\" 2>&1; then tail -n 30 \"$log\"; exit 1; fi"
-        self.runner.run_interactive(["sudo", "bash", "-c", apt], label="Install base network tools")
+        self.runner.run_interactive(["sudo", "bash", "-c", apt], label=msg("Install base network tools", "Установка сетевых утилит"))
 
     def preflight(self):
         import platform
         if platform.system() != "Linux" or platform.machine() not in ("aarch64", "arm64"):
-            raise RuntimeError("Requires Ubuntu ARM64 on the primary DGX Spark")
+            raise RuntimeError(msg("Requires Ubuntu ARM64 on the primary DGX Spark", "На основном DGX Spark требуется Ubuntu ARM64"))
         release = Path("/etc/os-release").read_text(encoding="utf-8")
         if "ID=ubuntu" not in release:
-            raise RuntimeError("Requires Ubuntu on both DGX Sparks")
+            raise RuntimeError(msg("Requires Ubuntu on both DGX Sparks", "На обоих DGX Spark требуется Ubuntu"))
         if self.bootstrap:
             self.bootstrap_prerequisites()
         for cmd in ("ip", "ethtool", "ssh", "rsync", "curl", "gnome-terminal", "nvidia-smi"):
             if not shutil.which(cmd):
-                raise RuntimeError(f"Missing {cmd}; install the Connect Dual Spark .deb package")
+                raise RuntimeError(msg(f"Missing {cmd}; install the Connect Dual Spark .deb package", f"Не найдена команда {cmd}; установите пакет Connect Dual Spark .deb"))
         gpu = self.runner.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"])
         if "GB10" not in gpu:
-            raise RuntimeError("Primary machine is not an NVIDIA DGX Spark (GB10 GPU absent)")
+            raise RuntimeError(msg("Primary machine is not an NVIDIA DGX Spark (GB10 GPU absent)", "Основной компьютер не является NVIDIA DGX Spark: GPU GB10 не найдена"))
 
     def detect_cluster(self):
         self.preflight()
@@ -102,36 +103,36 @@ class Installer:
         worker = self.runner.run(remote_ssh(peer, "uname -m; nvidia-smi --query-gpu=name --format=csv,noheader; . /etc/os-release; echo $ID"))
         lines = worker.splitlines()
         if len(lines) < 3 or lines[0] != "aarch64" or "GB10" not in lines[1] or lines[-1] != "ubuntu":
-            raise RuntimeError("Second machine must be an Ubuntu ARM64 DGX Spark with GB10")
+            raise RuntimeError(msg("Second machine must be an Ubuntu ARM64 DGX Spark with GB10", "Второй компьютер должен быть DGX Spark с Ubuntu ARM64 и GPU GB10"))
 
     def install_studio(self):
         if not self.studio.is_file():
             with tempfile.TemporaryDirectory(prefix="connect-dual-spark-") as temp:
                 installer = Path(temp) / "unsloth-install.sh"
-                self.runner.run_task(["curl", "-fL", "--retry", "3", "--output", str(installer), "https://unsloth.ai/install.sh"], label="Download official Unsloth installer", timeout=180)
+                self.runner.run_task(["curl", "-fL", "--retry", "3", "--output", str(installer), "https://unsloth.ai/install.sh"], label=msg("Download official Unsloth installer", "Загрузка установщика Unsloth"), timeout=180)
                 env = os.environ.copy()
                 env["UNSLOTH_SKIP_AUTOSTART"] = "1"
-                self.runner.run_task(["bash", str(installer)], label="Install Unsloth Studio", timeout=3600, env=env)
+                self.runner.run_task(["bash", str(installer)], label=msg("Install Unsloth Studio", "Установка Unsloth Studio"), timeout=3600, env=env)
         else:
-            print("    Unsloth Studio is already installed")
+            print(msg("    Unsloth Studio is already installed", "    Unsloth Studio уже установлена"))
         if not self.studio.is_file():
-            raise RuntimeError("Official Unsloth install did not provide Studio")
+            raise RuntimeError(msg("Official Unsloth install did not provide Studio", "Официальная установка Unsloth не создала Studio"))
         host_check = "dpkg-query -W cmake ninja-build build-essential git libibverbs-dev librdmacm-dev libnuma-dev libcurl4-openssl-dev >/dev/null 2>&1"
         try:
             self.runner.run(["bash", "-c", host_check])
         except CommandFailure:
-            print("    Installing host build packages (sudo may ask for its password)")
+            print(msg("    Installing host build packages (sudo may ask for its password)", "    Установка пакетов сборки на основном Spark (sudo может запросить пароль)"))
             apt = "set -e; log=$(mktemp); trap 'rm -f \"$log\"' EXIT; if ! (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y cmake ninja-build build-essential git libibverbs-dev librdmacm-dev libnuma-dev libcurl4-openssl-dev) >\"$log\" 2>&1; then tail -n 30 \"$log\"; exit 1; fi"
-            self.runner.run_interactive(["sudo", "bash", "-c", apt], label="Install host build packages")
+            self.runner.run_interactive(["sudo", "bash", "-c", apt], label=msg("Install host build packages", "Установка пакетов сборки на основном Spark"))
         if not (self.source / "CMakeLists.txt").is_file():
             self.source.parent.mkdir(parents=True, exist_ok=True)
-            self.runner.run_task(["git", "clone", "--depth", "1", "https://github.com/unslothai/llama.cpp", str(self.source)], label="Fetch matching llama.cpp source", timeout=1200)
+            self.runner.run_task(["git", "clone", "--depth", "1", "https://github.com/unslothai/llama.cpp", str(self.source)], label=msg("Fetch matching llama.cpp source", "Загрузка исходников llama.cpp"), timeout=1200)
         if not self.server.is_file():
             configure = ["cmake", "-S", str(self.source), "-B", str(self.source / "build"), "-G", "Ninja", "-DGGML_CUDA=ON", "-DGGML_RPC=ON", "-DGGML_RPC_RDMA=ON", "-DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc"]
-            self.runner.run_task(configure, label="Configure host CUDA/RPC/RDMA", timeout=1200)
-            self.runner.run_task(["cmake", "--build", str(self.source / "build"), "--target", "llama-server", "-j", "4"], label="Build host llama-server", timeout=3600)
+            self.runner.run_task(configure, label=msg("Configure host CUDA/RPC/RDMA", "Настройка CUDA/RPC/RDMA на основном Spark"), timeout=1200)
+            self.runner.run_task(["cmake", "--build", str(self.source / "build"), "--target", "llama-server", "-j", "4"], label=msg("Build host llama-server", "Сборка llama-server на основном Spark"), timeout=3600)
         if not self.server.is_file():
-            raise RuntimeError("Host llama.cpp server build did not produce a binary")
+            raise RuntimeError(msg("Host llama.cpp server build did not produce a binary", "Сборка llama.cpp на основном Spark не создала исполняемый файл сервера"))
 
     def _worker(self, command, *, timeout=60):
         return self.runner.run(remote_ssh(self.peer, command), timeout=timeout)
@@ -142,9 +143,9 @@ class Installer:
         try:
             self._worker(check)
         except CommandFailure:
-            print("    Installing build packages on the second Spark (sudo may ask for its password)")
+            print(msg("    Installing build packages on the second Spark (sudo may ask for its password)", "    Установка пакетов сборки на втором Spark (sudo может запросить пароль)"))
             apt = "set -e; log=$(mktemp); trap 'rm -f \"$log\"' EXIT; if ! (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y cmake ninja-build build-essential git rsync libibverbs-dev librdmacm-dev libnuma-dev libcurl4-openssl-dev) >\"$log\" 2>&1; then tail -n 30 \"$log\"; exit 1; fi"
-            self.runner.run_interactive(remote_ssh(peer, "sudo bash -c " + shlex.quote(apt), tty=True), label="Install worker build packages")
+            self.runner.run_interactive(remote_ssh(peer, "sudo bash -c " + shlex.quote(apt), tty=True), label=msg("Install worker build packages", "Установка пакетов сборки на втором Spark"))
         base = f"{peer.worker_home}/.local/share/connect-dual-spark"
         dest = f"{base}/llama-src"
         self._worker(remote_cmd("mkdir", "-p", dest))
@@ -152,20 +153,20 @@ class Installer:
         self.runner.run_task([
             "rsync", "-ac", "--delete", "--exclude=build/", "--exclude=.git/", "-e", ssh_transport,
             f"{self.source}/", f"{peer.worker_user}@{peer.worker_ip}:{dest}/",
-        ], label="Sync exact llama.cpp source over ConnectX-7", timeout=1200)
+        ], label=msg("Sync exact llama.cpp source over ConnectX-7", "Синхронизация исходников llama.cpp через ConnectX-7"), timeout=1200)
         delta = self.runner.run([
             "rsync", "-nrc", "--delete", "--itemize-changes", "--exclude=build/", "--exclude=.git/", "-e", ssh_transport,
             f"{self.source}/", f"{peer.worker_user}@{peer.worker_ip}:{dest}/",
         ], timeout=1200)
         if delta.strip():
-            raise RuntimeError("llama.cpp source differs after synchronization: " + delta[:300])
+            raise RuntimeError(msg("llama.cpp source differs after synchronization: ", "Исходники llama.cpp различаются после синхронизации: ") + delta[:300])
         source_hash = self.runner.run(["sha256sum", str(self.source / "CMakeLists.txt")]).split()[0]
         remote_hash = self._worker(remote_cmd("sha256sum", f"{dest}/CMakeLists.txt")).split()[0]
         if source_hash != remote_hash:
-            raise RuntimeError("Source checksum differs between Sparks")
+            raise RuntimeError(msg("Source checksum differs between Sparks", "Контрольные суммы исходников на двух Spark различаются"))
         configure = remote_cmd("cmake", "-S", dest, "-B", f"{dest}/build", "-G", "Ninja", "-DGGML_CUDA=ON", "-DGGML_RPC=ON", "-DGGML_RPC_RDMA=ON", "-DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc")
-        self.runner.run_task(remote_ssh(peer, configure), label="Configure worker CUDA/RPC/RDMA", timeout=1200)
-        self.runner.run_task(remote_ssh(peer, remote_cmd("cmake", "--build", f"{dest}/build", "--target", "ggml-rpc-server", "-j", "4")), label="Build worker RPC server", timeout=3600)
+        self.runner.run_task(remote_ssh(peer, configure), label=msg("Configure worker CUDA/RPC/RDMA", "Настройка CUDA/RPC/RDMA на втором Spark"), timeout=1200)
+        self.runner.run_task(remote_ssh(peer, remote_cmd("cmake", "--build", f"{dest}/build", "--target", "ggml-rpc-server", "-j", "4")), label=msg("Build worker RPC server", "Сборка RPC-сервера на втором Spark"), timeout=3600)
         self._worker(remote_cmd("test", "-x", f"{dest}/build/bin/ggml-rpc-server"))
 
     def _rpc_binary(self):
@@ -252,15 +253,15 @@ class Installer:
         peer = self.peer
         dropins = self._rpc_service_dropins()
         if dropins:
-            raise RuntimeError(f"Worker RPC has an existing systemd override ({dropins}); inspect it before installation")
+            raise RuntimeError(msg(f"Worker RPC has an existing systemd override ({dropins}); inspect it before installation", f"У службы RPC есть дополнительная настройка systemd ({dropins}); проверьте её перед установкой"))
         if self._rpc_service_state() and _tcp_open(peer.host_ip, peer.worker_ip, RPC_PORT):
-            print("    Worker RPC system service is already active and enabled at boot")
+            print(msg("    Worker RPC system service is already active and enabled at boot", "    Системная служба RPC уже работает и включена при загрузке"))
             self._show_rpc_logs()
             return
         port_open = _tcp_open(peer.host_ip, peer.worker_ip, RPC_PORT)
         owned = port_open and self._rpc_service_owned()
         if port_open and not owned:
-            raise RuntimeError("RPC port is occupied by an unmanaged process; stop the old terminal RPC before installing the boot service")
+            raise RuntimeError(msg("RPC port is occupied by an unmanaged process; stop the old terminal RPC before installing the boot service", "Порт RPC занят сторонним процессом; остановите старый RPC в терминале перед установкой службы автозапуска"))
         needs_restart = not (owned and self._rpc_runtime_correct())
         defer_restart = needs_restart and self._host_model_active()
         remote_unit = f"{peer.worker_home}/.local/share/connect-dual-spark/{RPC_SERVICE}"
@@ -269,7 +270,7 @@ class Installer:
             local_unit = tmp.name
         try:
             ssh_transport = shlex.join(["ssh", "-b", peer.host_ip, "-o", f"BindInterface={peer.host_iface}", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new"])
-            self.runner.run_task(["rsync", "-a", "-e", ssh_transport, local_unit, f"{peer.worker_user}@{peer.worker_ip}:{remote_unit}"], label="Stage worker RPC system unit", timeout=60)
+            self.runner.run_task(["rsync", "-a", "-e", ssh_transport, local_unit, f"{peer.worker_user}@{peer.worker_ip}:{remote_unit}"], label=msg("Stage worker RPC system unit", "Подготовка системной службы RPC"), timeout=60)
         finally:
             Path(local_unit).unlink(missing_ok=True)
         install = (
@@ -280,20 +281,20 @@ class Installer:
         )
         if needs_restart and not defer_restart:
             install += "; " + remote_cmd("systemctl", "restart", RPC_SERVICE)
-        self.runner.run_interactive(remote_ssh(peer, "sudo bash -c " + shlex.quote(install), tty=True), label="Enable worker RPC at boot (sudo authorization)")
+        self.runner.run_interactive(remote_ssh(peer, "sudo bash -c " + shlex.quote(install), tty=True), label=msg("Enable worker RPC at boot (sudo authorization)", "Включение RPC при загрузке второго Spark (sudo)"))
         if defer_restart:
-            raise RuntimeError("Worker RPC boot service is enabled, but its running binary needs a restart; unload the current model and run connect-dual-spark start-rpc")
+            raise RuntimeError(msg("Worker RPC boot service is enabled, but its running binary needs a restart; unload the current model and run connect-dual-spark start-rpc", "Автозапуск службы RPC включён, но текущий процесс требует перезапуска; выгрузите модель и выполните connect-dual-spark start-rpc"))
         for _ in range(60):
             if self._rpc_service_state() and _tcp_open(peer.host_ip, peer.worker_ip, RPC_PORT):
-                print("    Worker RPC system service is active and enabled at boot")
+                print(msg("    Worker RPC system service is active and enabled at boot", "    Системная служба RPC работает и включена при загрузке"))
                 self._show_rpc_logs()
                 return
             time.sleep(1)
-        raise RuntimeError("Worker RPC system service did not become reachable; inspect systemctl status connect-dual-spark-rpc.service on the second Spark")
+        raise RuntimeError(msg("Worker RPC system service did not become reachable; inspect systemctl status connect-dual-spark-rpc.service on the second Spark", "Служба RPC не стала доступной; проверьте systemctl status connect-dual-spark-rpc.service на втором Spark"))
 
     def smoke_test(self):
         if self._host_model_active():
-            raise RuntimeError("Another llama-server is running. Stop its model before the temporary RPC smoke test")
+            raise RuntimeError(msg("Another llama-server is running. Stop its model before the temporary RPC smoke test", "Другой llama-server уже работает. Выгрузите его модель перед пробной проверкой RPC"))
         with socket.socket() as sock:
             sock.bind(("127.0.0.1", 0))
             port = sock.getsockname()[1]
@@ -307,7 +308,7 @@ class Installer:
                     deadline = time.monotonic() + 900
                     while time.monotonic() < deadline:
                         if proc.poll() is not None:
-                            raise RuntimeError("Tiny GGUF server exited: " + log_path.read_text(errors="replace")[-3000:])
+                            raise RuntimeError(msg("Tiny GGUF server exited: ", "Сервер пробной GGUF-модели завершился: ") + log_path.read_text(errors="replace")[-3000:])
                         try:
                             with opener.open(f"http://127.0.0.1:{port}/health", timeout=2) as response:
                                 if response.status == 200:
@@ -316,18 +317,18 @@ class Installer:
                             pass
                         time.sleep(2)
                     else:
-                        raise RuntimeError("Tiny GGUF did not become healthy within 15 minutes")
+                        raise RuntimeError(msg("Tiny GGUF did not become healthy within 15 minutes", "Пробная GGUF-модель не стала готовой за 15 минут"))
                     payload = json.dumps({"prompt": "Reply with the word READY.", "n_predict": 8, "temperature": 0}).encode()
                     req = request.Request(f"http://127.0.0.1:{port}/completion", data=payload, headers={"Content-Type": "application/json"})
                     with opener.open(req, timeout=120) as response:
                         result = json.load(response)
                     if not result.get("content", "").strip():
-                        raise RuntimeError("Tiny GGUF returned an empty completion")
+                        raise RuntimeError(msg("Tiny GGUF returned an empty completion", "Пробная GGUF-модель вернула пустой ответ"))
                     log.flush()
                     evidence = log_path.read_text(errors="replace")
                     if not smoke_log_proves_rdma(evidence, self.peer):
-                        raise RuntimeError("Tiny GGUF did not prove remote weights over active RDMA; inspect the log for TCP fallback")
-                    print("    Tiny GGUF completed an inference with remote weights over RDMA")
+                        raise RuntimeError(msg("Tiny GGUF did not prove remote weights over active RDMA; inspect the log for TCP fallback", "Пробная GGUF-модель не подтвердила размещение весов на втором Spark через RDMA; проверьте журнал на переход к TCP"))
+                    print(msg("    Tiny GGUF completed an inference with remote weights over RDMA", "    Пробная GGUF-модель выполнила запрос с удалёнными весами через RDMA"))
                 finally:
                     proc.terminate()
                     try:
@@ -356,25 +357,25 @@ class Installer:
     def verify_installation(self):
         peer = ClusterProbe(self.runner.run).detect()
         if peer.worker_ip != self.peer.worker_ip or peer.host_ip != self.peer.host_ip:
-            raise RuntimeError("ConnectX-7 route changed after installation")
+            raise RuntimeError(msg("ConnectX-7 route changed after installation", "Маршрут ConnectX-7 изменился после установки"))
         if not _tcp_open(peer.host_ip, peer.worker_ip, RPC_PORT) or not self._rpc_service_state():
-            raise RuntimeError("Worker RPC boot service is not active and reachable on ConnectX-7")
+            raise RuntimeError(msg("Worker RPC boot service is not active and reachable on ConnectX-7", "Служба RPC второго Spark не работает или недоступна через ConnectX-7"))
         if not self.studio.is_file() or not self.server.is_file():
-            raise RuntimeError("Unsloth Studio or llama.cpp server is missing")
+            raise RuntimeError(msg("Unsloth Studio or llama.cpp server is missing", "Отсутствует Unsloth Studio или сервер llama.cpp"))
         unit = self.unit.read_text(encoding="utf-8")
         if f"LLAMA_ARG_RPC={peer.worker_ip}:{RPC_PORT}" not in unit:
-            raise RuntimeError("Studio RPC configuration differs from discovered peer")
+            raise RuntimeError(msg("Studio RPC configuration differs from discovered peer", "Адрес RPC в настройках Studio не совпадает с обнаруженным вторым Spark"))
         environment = (self.home / ".config/environment.d/90-connect-dual-spark.conf").read_text(encoding="utf-8")
         if f"LLAMA_ARG_RPC={peer.worker_ip}:{RPC_PORT}" not in environment or f"UNSLOTH_LLAMA_CPP_PATH={self.source}" not in environment:
-            raise RuntimeError("Desktop login RPC configuration differs from discovered peer")
+            raise RuntimeError(msg("Desktop login RPC configuration differs from discovered peer", "Адрес RPC в настройках рабочего стола не совпадает с обнаруженным вторым Spark"))
 
     def perform(self, stage):
         getattr(self, stage)()
 
     def offer_studio(self):
-        answer = input("Все проверки пройдены. Запустить Unsloth Studio сейчас? [Y/n] ").strip().lower()
+        answer = input(msg("All checks passed. Start Unsloth Studio now? [Y/n] ", "Все проверки пройдены. Запустить Unsloth Studio сейчас? [Y/n] ")).strip().lower()
         if answer not in ("", "y", "yes", "д", "да"):
-            print("    Studio готова к запуску: connect-dual-spark studio")
+            print(msg("    Studio is ready: connect-dual-spark studio", "    Studio готова к запуску: connect-dual-spark studio"))
             return False
         return self.launch_studio()
 
@@ -386,17 +387,17 @@ class Installer:
         if active:
             pid = int(self.runner.run(["systemctl", "--user", "show", "-p", "MainPID", "--value", self.unit.name]).strip())
             if pid <= 0:
-                raise RuntimeError("Existing Studio service has no process")
+                raise RuntimeError(msg("Existing Studio service has no process", "У существующей службы Studio нет работающего процесса"))
             process_environment = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
             required = {
                 f"LLAMA_ARG_RPC={self.peer.worker_ip}:{RPC_PORT}".encode(),
                 f"UNSLOTH_LLAMA_CPP_PATH={self.source}".encode(),
             }
             if not required.issubset(set(process_environment)):
-                raise RuntimeError("Existing Studio service has outdated RPC settings; stop it before launching the configured service")
+                raise RuntimeError(msg("Existing Studio service has outdated RPC settings; stop it before launching the configured service", "У существующей службы Studio устаревшие настройки RPC; остановите её перед запуском настроенной службы"))
         else:
             if _tcp_open("127.0.0.1", "127.0.0.1", STUDIO_PORT):
-                raise RuntimeError("Port 8888 is occupied by another Studio or HTTP process; stop it before launching the configured service")
+                raise RuntimeError(msg("Port 8888 is occupied by another Studio or HTTP process; stop it before launching the configured service", "Порт 8888 занят другой Studio или HTTP-службой; остановите её перед запуском настроенной службы"))
             self.runner.run(["systemctl", "--user", "start", self.unit.name])
         opener = request.build_opener(request.ProxyHandler({}))
         for _ in range(30):
@@ -410,7 +411,7 @@ class Installer:
             except Exception:
                 time.sleep(1)
         else:
-            raise RuntimeError("Studio service did not become ready on localhost:8888")
+            raise RuntimeError(msg("Studio service did not become ready on localhost:8888", "Служба Studio не стала доступной на localhost:8888"))
         subprocess.Popen(["xdg-open", f"http://127.0.0.1:{STUDIO_PORT}/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
 
@@ -420,10 +421,12 @@ class Installer:
 
     def status(self):
         self.detect_cluster()
-        print(f"    Studio: {'installed' if self.studio.is_file() else 'missing'}")
-        print(f"    llama.cpp: {'installed' if self.server.is_file() else 'missing'}")
+        installed = msg("installed", "установлено")
+        missing = msg("missing", "отсутствует")
+        print(f"    Studio: {installed if self.studio.is_file() else missing}")
+        print(f"    llama.cpp: {installed if self.server.is_file() else missing}")
         service_ready = self._rpc_service_state()
         listening = _tcp_open(self.peer.host_ip, self.peer.worker_ip, RPC_PORT)
-        print(f"    Worker RPC boot service: {'enabled and active' if service_ready else 'not ready'}")
-        print(f"    Worker RPC CX7 listener: {'reachable' if listening else 'offline'}")
-        print(f"    Studio unit: {'configured' if self.unit.is_file() else 'missing'}")
+        print(f"    {msg('Worker RPC boot service', 'Служба RPC при загрузке')}: {msg('enabled and active', 'включена и работает') if service_ready else msg('not ready', 'не готова')}")
+        print(f"    {msg('Worker RPC CX7 listener', 'RPC на ConnectX-7')}: {msg('reachable', 'доступен') if listening else msg('offline', 'недоступен')}")
+        print(f"    {msg('Studio unit', 'Служба Studio')}: {msg('configured', 'настроена') if self.unit.is_file() else missing}")
