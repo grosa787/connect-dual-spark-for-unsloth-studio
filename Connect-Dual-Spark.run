@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+
+fail() {
+    printf 'Connect Dual Spark: %s\n' "$1" >&2
+    exit 1
+}
+
+command -v python3 >/dev/null 2>&1 || fail 'python3 не найден.'
+command -v gnome-terminal >/dev/null 2>&1 || fail 'GNOME Terminal не найден.'
+[[ -f "$project_dir/dual_spark/cli.py" ]] || \
+    fail 'рядом с launcher отсутствует dual_spark/cli.py.'
+
+exec gnome-terminal \
+    --title=Connect-Dual-Spark \
+    -- \
+    bash -c '
+        project_dir=$1
+        cd -- "$project_dir" || exit 1
+        python3 -m dual_spark.cli install
+        status=$?
+        printf "\nConnect Dual Spark завершил работу (код %s).\n" "$status"
+        printf "Нажмите Enter, чтобы закрыть окно."
+        read -r _
+        exit "$status"
+    ' connect-dual-spark "$project_dir"

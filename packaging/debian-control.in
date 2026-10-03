@@ -1,0 +1,10 @@
+Package: connect-dual-spark
+Version: @VERSION@
+Section: admin
+Priority: optional
+Architecture: arm64
+Maintainer: Connect Dual Spark contributors <connect-dual-spark@users.noreply.github.com>
+Depends: python3 (>= 3.10), gnome-terminal, iproute2, ethtool, openssh-client, sudo, curl, rsync, git, xdg-utils
+Description: configure two DGX Spark systems for Unsloth Studio
+ Discovers a direct ConnectX-7 link, prepares llama.cpp RPC on the
+ second DGX Spark, and configures Unsloth Studio to use that link.

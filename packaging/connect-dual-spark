@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+app_dir=/usr/lib/connect-dual-spark
+export PYTHONPATH="$app_dir${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m dual_spark.cli "$@"

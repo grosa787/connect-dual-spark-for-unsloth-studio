@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+package_version='@PACKAGE_VERSION@'
+payload_sha256='@PAYLOAD_SHA256@'
+payload_marker='__CONNECT_DUAL_SPARK_PAYLOAD_BELOW__'
+work_dir=''
+
+fail() {
+    printf 'Connect Dual Spark: %s\n' "$1" >&2
+    exit 1
+}
+
+cleanup() {
+    if [[ -n "$work_dir" && -d "$work_dir" ]]; then
+        rm -rf -- "$work_dir"
+    fi
+}
+trap cleanup EXIT
+
+usage() {
+    cat <<EOF
+Connect Dual Spark for Unsloth Studio ${package_version}
+
+Usage:
+  ${0##*/}            verify, unpack, and start the installer
+  ${0##*/} --verify   verify the embedded payload without installing
+  ${0##*/} --version  print the embedded version
+EOF
+}
+
+sha256_file() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | awk '{print $1}'
+    else
+        fail 'не найдена команда sha256sum или shasum.'
+    fi
+}
+
+resolve_self() {
+    local candidate=${BASH_SOURCE[0]}
+    if [[ "$candidate" != */* ]]; then
+        candidate="$(command -v "$candidate")"
+    fi
+    local directory
+    directory="$(cd -- "$(dirname -- "$candidate")" && pwd -P)"
+    printf '%s/%s\n' "$directory" "$(basename -- "$candidate")"
+}
+
+extract_payload() {
+    local self_path payload_line archive_path listing_path actual_sha
+    self_path="$(resolve_self)"
+    payload_line="$(awk -v marker="$payload_marker" '$0 == marker { print NR + 1; exit }' "$self_path")"
+    [[ -n "$payload_line" ]] || fail 'встроенный архив не найден.'
+
+    work_dir="$(mktemp -d "${TMPDIR:-/tmp}/connect-dual-spark.XXXXXXXX")"
+    archive_path="$work_dir/payload.tar.gz"
+    listing_path="$work_dir/payload.list"
+    tail -n +"$payload_line" "$self_path" > "$archive_path"
+
+    actual_sha="$(sha256_file "$archive_path")"
+    [[ "$actual_sha" == "$payload_sha256" ]] || \
+        fail 'контрольная сумма встроенного архива не совпадает.'
+
+    tar -tzf "$archive_path" > "$listing_path" || \
+        fail 'встроенный архив повреждён.'
+    if awk '
+        /^\// || $0 == ".." || /^\.\.\// || /\/\.\.\// || /\/\.\.$/ { unsafe = 1 }
+        END { exit unsafe ? 0 : 1 }
+    ' "$listing_path"; then
+        fail 'встроенный архив содержит небезопасный путь.'
+    fi
+
+    mkdir -m 0700 "$work_dir/payload"
+    tar -xzf "$archive_path" -C "$work_dir/payload"
+    [[ -f "$work_dir/payload/dual_spark/cli.py" ]] || \
+        fail 'встроенный архив не содержит dual_spark/cli.py.'
+}
+
+run_installer() {
+    local payload_dir=$1
+    local result_file="$work_dir/installer.status"
+    local terminal_status installer_status
+
+    command -v python3 >/dev/null 2>&1 || fail 'python3 не найден.'
+    command -v gnome-terminal >/dev/null 2>&1 || \
+        fail 'для установки и видимого worker RPC требуется GNOME Terminal.'
+    [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]] || \
+        fail 'графический сеанс GNOME не найден; запустите файл на рабочем столе DGX Spark.'
+
+    set +e
+    gnome-terminal \
+        --wait \
+        --title=Connect-Dual-Spark \
+        -- \
+        bash -c '
+            payload_dir=$1
+            result_file=$2
+            cd -- "$payload_dir" || exit 1
+            PYTHONPATH="$payload_dir${PYTHONPATH:+:$PYTHONPATH}" \
+                python3 -m dual_spark.cli install
+            installer_status=$?
+            printf "%s\n" "$installer_status" > "$result_file"
+            printf "\nConnect Dual Spark завершил работу (код %s).\n" "$installer_status"
+            printf "Нажмите Enter, чтобы закрыть окно."
+            read -r _
+            exit "$installer_status"
+        ' connect-dual-spark "$payload_dir" "$result_file"
+    terminal_status=$?
+    set -e
+
+    [[ -f "$result_file" ]] || \
+        fail "GNOME Terminal завершился до запуска установщика (код $terminal_status)."
+    installer_status="$(<"$result_file")"
+    [[ "$installer_status" =~ ^[0-9]+$ ]] || \
+        fail 'установщик вернул некорректный код завершения.'
+    return "$installer_status"
+}
+
+main() {
+    case "${1:-}" in
+        '') ;;
+        --verify)
+            [[ $# -eq 1 ]] || { usage >&2; return 2; }
+            extract_payload
+            printf 'OK: Connect Dual Spark %s, payload SHA-256 %s\n' \
+                "$package_version" "$payload_sha256"
+            return 0
+            ;;
+        --version)
+            [[ $# -eq 1 ]] || { usage >&2; return 2; }
+            printf '%s\n' "$package_version"
+            return 0
+            ;;
+        -h|--help)
+            usage
+            return 0
+            ;;
+        *)
+            usage >&2
+            return 2
+            ;;
+    esac
+
+    [[ "$(uname -s)" == 'Linux' ]] || \
+        fail 'установка поддерживается только на Ubuntu ARM64.'
+    case "$(uname -m)" in
+        aarch64|arm64) ;;
+        *) fail 'установка поддерживается только на ARM64 DGX Spark.' ;;
+    esac
+
+    extract_payload
+    run_installer "$work_dir/payload"
+}
+
+main "$@"
+exit 0
+
+__CONNECT_DUAL_SPARK_PAYLOAD_BELOW__

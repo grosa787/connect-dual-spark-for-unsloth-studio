@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Connect Dual Spark
+Name[ru]=Подключить два DGX Spark
+Comment=Configure two DGX Spark systems for Unsloth Studio
+Comment[ru]=Настроить два DGX Spark для Unsloth Studio
+TryExec=/usr/bin/connect-dual-spark
+Exec=gnome-terminal --title=Connect-Dual-Spark -- /usr/bin/connect-dual-spark install
+Icon=network-wired
+Terminal=false
+Categories=System;Utility;
+Keywords=DGX;Spark;Unsloth;ConnectX;RPC;
+StartupNotify=true
