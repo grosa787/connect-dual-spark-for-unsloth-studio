@@ -4,7 +4,7 @@
 
 Connect Dual Spark automatically discovers the direct ConnectX-7 link between exactly two NVIDIA DGX Spark systems, installs Unsloth Studio, and configures `llama.cpp` RPC on the second Spark. Inter-node model traffic is allowed only over the verified high-speed ConnectX-7 interface.
 
-> **Pre-release status:** The project passes automated static and package-structure checks, but a complete clean installation has not yet been validated on a physical pair of DGX Spark systems. Treat version 0.5.0 as a pre-release and test it on the target hardware before production use.
+> **Pre-release status:** The project passes automated static and package-structure checks, but a complete clean installation has not yet been validated on a physical pair of DGX Spark systems. Treat version 0.5.1 as a pre-release and test it on the target hardware before production use.
 
 Standalone operation is available only after a successful installation and pairing of two Sparks. The initial installation still requires both systems and their direct ConnectX-7 link. Later, if every local ConnectX-7 interface has no carrier, the guarded `llama-server` can run on the primary Spark alone and lets Unsloth/`llama.cpp` fit the model to the available local memory. This does not guarantee that a model sized for two Sparks will fit on one.
 
@@ -69,7 +69,7 @@ The source launcher is intended for development and requires the adjacent `dual_
 ## Build the self-contained `.run` release
 
 ```bash
-./scripts/build_run.sh 0.5.0
+./scripts/build_run.sh 0.5.1
 ./dist/Connect-Dual-Spark-arm64.run --verify
 ```
 
@@ -80,8 +80,8 @@ The build script packages the current `dual_spark` module, removes Python caches
 The Debian package targets the `arm64` architecture:
 
 ```bash
-./scripts/build_deb.sh 0.5.0
-sudo apt install ./dist/connect-dual-spark_0.5.0_arm64.deb
+./scripts/build_deb.sh 0.5.1
+sudo apt install ./dist/connect-dual-spark_0.5.1_arm64.deb
 ```
 
 After installation, launch **Connect Dual Spark** from the application menu or run:
@@ -131,7 +131,7 @@ For GGUF model loads, the installer places a persistent guard at both the defaul
 
 After the initial two-Spark installation, the guard selects one of two runtime modes:
 
-- If any local ConnectX-7 interface has carrier and the RPC worker at port `50053` is reachable through the verified route, a `--list-devices` probe includes both `CUDA0` and `RPC0`. For model loads, the guard places the following options last in the final `llama.cpp` command, so they override conflicting earlier device choices and keep the forced 1:1 split:
+- If any local ConnectX-7 interface has carrier and the RPC worker at port `50053` is reachable through the verified route, a `--list-devices` probe includes both `CUDA0` and `RPC0`. Before model loads, the guard removes earlier RPC/device/split options, including stale RPC endpoints on a slower network. It then adds only the verified ConnectX-7 endpoint and these final options for the forced 1:1 split:
 
 ```text
 --rpc discovered-peer:50053 --device CUDA0,RPC0 --split-mode layer --tensor-split 1,1 --n-gpu-layers all

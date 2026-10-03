@@ -17,7 +17,9 @@ class LlamaWrapperTests(unittest.TestCase):
     def test_model_launch_enforces_remote_rpc_and_two_nonzero_splits(self):
         original = ["-m", "/models/model.gguf", "--rpc", "192.168.1.3:50053", "-c", "4096"]
         command = enforced_command("/opt/llama-server", original, "10.100.32.2:50053")
-        self.assertEqual(command[:1 + len(original)], ["/opt/llama-server", *original])
+        self.assertNotIn("192.168.1.3:50053", command)
+        self.assertEqual(command.count("--rpc"), 1)
+        self.assertEqual(command[:5], ["/opt/llama-server", "-m", "/models/model.gguf", "-c", "4096"])
         self.assertEqual(command[-10:], [
             "--rpc", "10.100.32.2:50053", "--device", "CUDA0,RPC0", "--split-mode", "layer",
             "--tensor-split", "1,1", "--n-gpu-layers", "all",
@@ -28,8 +30,20 @@ class LlamaWrapperTests(unittest.TestCase):
             with self.subTest(chosen_device=chosen_device):
                 args = ["-m", "/models/model.gguf", "--device", chosen_device]
                 command = enforced_command("/opt/llama-server", args, "10.100.32.2:50053")
-                self.assertEqual(command[command.index("--device") + 1], chosen_device)
+                self.assertNotIn(chosen_device, command[:4])
+                self.assertEqual(command.count("--device"), 1)
                 self.assertEqual(command[-10:][3], "CUDA0,RPC0")
+
+    def test_old_management_rpc_and_split_flags_are_removed_before_backend_init(self):
+        command = enforced_command("/opt/llama-server", [
+            "--rpc", "192.168.150.49:50052", "--rpc=192.168.150.49:50052",
+            "--device", "CUDA0,RPC0", "-ts", "1,0", "-sm", "none", "-ngl", "0",
+            "-m", "/models/model.gguf",
+        ], "10.100.32.2:50053")
+        self.assertNotIn("192.168.150.49:50052", " ".join(command))
+        self.assertEqual(command.count("--rpc"), 1)
+        self.assertEqual(command.count("--device"), 1)
+        self.assertEqual(command[:3], ["/opt/llama-server", "-m", "/models/model.gguf"])
 
     def test_device_probe_includes_the_rpc_peer(self):
         self.assertEqual(

@@ -14,6 +14,10 @@ import sys
 INFORMATIONAL_FLAGS = {"--help", "-h", "--version"}
 GUARD_REVISION = 2
 DEVICE_QUERY_FLAGS = {"--list-devices"}
+PAIR_OPTIONS_WITH_VALUE = {
+    "--rpc", "--device", "-dev", "--tensor-split", "-ts", "--split-mode", "-sm",
+    "--n-gpu-layers", "--gpu-layers", "-ngl",
+}
 OVERRIDDEN_ENV = {
     "CUDA_VISIBLE_DEVICES", "LLAMA_ARG_DEVICE", "LLAMA_ARG_RPC",
     "LLAMA_ARG_SPLIT_MODE", "LLAMA_ARG_TENSOR_SPLIT", "LLAMA_ARG_N_GPU_LAYERS",
@@ -84,19 +88,23 @@ def reject_placement_overrides(args, environment):
             raise RuntimeError("tensor placement override is incompatible with the two-Spark guard")
 
 
-def _probe_args(args):
+def _strip_pair_options(args):
     filtered = []
     skip_value = False
     for arg in args:
         if skip_value:
             skip_value = False
             continue
-        name = arg.split("=", 1)[0]
-        if name in ("--rpc", "--device", "-dev"):
+        name = arg.split("=", 1)[0].replace("_", "-")
+        if name in PAIR_OPTIONS_WITH_VALUE:
             skip_value = "=" not in arg
             continue
         filtered.append(arg)
     return filtered
+
+
+def _probe_args(args):
+    return _strip_pair_options(args)
 
 
 def local_command(binary, args):
@@ -129,8 +137,8 @@ def enforced_command(binary, args, endpoint):
         return command
     if device_query(args):
         return [binary, "--rpc", endpoint, *_probe_args(args)]
-    # llama.cpp applies repeated options in order; the final value wins.
-    return command + [
+    # --rpc registers devices as it is parsed, so remove old endpoints first.
+    return [binary, *_strip_pair_options(args)] + [
         "--rpc", endpoint, "--device", "CUDA0,RPC0", "--split-mode", "layer", "--tensor-split", "1,1",
         "--n-gpu-layers", "all",
     ]
