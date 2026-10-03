@@ -57,6 +57,35 @@ class CliLanguageTests(unittest.TestCase):
         finally:
             set_language("en")
 
+    def test_studio_command_uses_existing_pair_setup_when_cable_is_absent(self):
+        calls = []
+
+        class FakeRunner:
+            log_path = Path("/tmp/connect-dual-spark-test.log")
+
+            def __init__(self, **kwargs):
+                pass
+
+        class FakeInstaller:
+            def __init__(self, runner):
+                pass
+
+            def verify_standalone(self):
+                calls.append("verify_standalone")
+
+            def launch_studio(self):
+                calls.append("launch_studio")
+
+            def detect_cluster(self):
+                raise AssertionError("must not require a peer with no cable")
+
+        with patch("dual_spark.cli.Runner", FakeRunner), \
+             patch("dual_spark.cli.Installer", FakeInstaller), \
+             patch("dual_spark.cli.connectx_cable_present", return_value=False), \
+             redirect_stdout(StringIO()):
+            self.assertEqual(main(["--lang", "en", "studio"]), 0)
+        self.assertEqual(calls, ["verify_standalone", "launch_studio"])
+
 
 if __name__ == "__main__":
     unittest.main()

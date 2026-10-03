@@ -4,6 +4,7 @@ import argparse
 import sys
 
 from .language import current_language, msg, resolve_language, set_language
+from .llama_wrapper import connectx_cable_present
 from .operations import Installer
 from .system import CommandFailure, Runner
 from .workflow import SetupWorkflow
@@ -91,8 +92,11 @@ def main(argv=None):
             installer.start_rpc()
             print(msg("✓ RPC is running", "✓ RPC запущен"))
         elif args.command == "studio":
-            installer.detect_cluster()
-            installer.verify_installation()
+            if connectx_cable_present():
+                installer.detect_cluster()
+                installer.verify_installation()
+            else:
+                installer.verify_standalone()
             installer.launch_studio()
             print(msg("✓ Studio is running", "✓ Studio запущена"))
         else:

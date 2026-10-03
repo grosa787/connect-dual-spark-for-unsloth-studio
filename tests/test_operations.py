@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import patch
 import json
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 import tempfile
 
@@ -198,6 +200,9 @@ class OperationsTests(unittest.TestCase):
             installer.peer = self.peer
             installer.install_llama_guard()
             self.assertTrue(installer._llama_guard_ready())
+            installer.peer = None
+            self.assertTrue(installer._llama_guard_ready())
+            installer.peer = self.peer
 
             wrapper = home / ".local/share/connect-dual-spark/llama-server-wrapper.py"
             self.assertEqual((default / "llama-server").resolve(), wrapper.resolve())
@@ -209,6 +214,121 @@ class OperationsTests(unittest.TestCase):
             (default / "llama-server").unlink()
             (default / "llama-server").symlink_to("build/bin/llama-server")
             self.assertFalse(installer._llama_guard_ready())
+
+    def test_status_reports_standalone_without_contacting_worker(self):
+        with tempfile.TemporaryDirectory() as temp:
+            installer = Installer(object())
+            installer.studio = Path(temp) / "unsloth"
+            installer.server = Path(temp) / "llama-server"
+            installer.studio.write_text("installed")
+            installer.server.write_text("installed")
+            output = StringIO()
+            with patch.object(installer, "preflight"), \
+                 patch.object(installer, "_llama_guard_ready", return_value=True), \
+                 patch("dual_spark.operations.connectx_cable_present", return_value=False), \
+                 redirect_stdout(output):
+                installer.status()
+            self.assertIn("Mode: standalone", output.getvalue())
+
+    def test_status_does_not_call_fresh_unpaired_spark_standalone(self):
+        installer = Installer(object())
+        output = StringIO()
+        with patch.object(installer, "preflight"), \
+             patch.object(installer, "_llama_guard_ready", return_value=False), \
+             patch("dual_spark.operations.connectx_cable_present", return_value=False), \
+             redirect_stdout(output):
+            installer.status()
+        self.assertIn("unconfigured", output.getvalue())
+        self.assertNotIn("Mode: standalone", output.getvalue())
+
+    def test_standalone_studio_uses_saved_pair_without_contacting_worker(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            installer = Installer(object())
+            installer.home = home
+            installer.studio = home / "unsloth"
+            installer.server = home / "llama-server-real"
+            installer.unit = home / "studio.service"
+            installer.studio.write_text("installed")
+            installer.server.write_text("installed")
+            wrapper = installer._llama_wrapper_path()
+            wrapper.parent.mkdir(parents=True)
+            wrapper.with_suffix(".json").write_text('{"rpc":"10.100.32.2:50053"}')
+            installer.unit.write_text(f"Environment=LLAMA_SERVER_PATH={wrapper}\n")
+            with patch.object(installer, "preflight"), \
+                 patch.object(installer, "_llama_guard_ready", return_value=True), \
+                 patch("dual_spark.operations.connectx_cable_present", return_value=False):
+                installer.verify_standalone()
+
+    def test_standalone_studio_refreshes_wrapper_after_package_upgrade(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            default = home / ".unsloth/llama.cpp"
+            managed = home / ".local/share/connect-dual-spark/llama-src"
+            default.mkdir(parents=True)
+            managed.mkdir(parents=True)
+            installer = Installer(object())
+            installer.home = home
+            installer.source = managed
+            installer.server = managed / "build/bin/llama-server"
+            installer.server.parent.mkdir(parents=True)
+            installer.server.write_text("binary")
+            installer.studio = home / "unsloth"
+            installer.studio.write_text("installed")
+            installer.unit = home / "studio.service"
+            installer.peer = self.peer
+            installer.install_llama_guard()
+            wrapper = installer._llama_wrapper_path()
+            installer.unit.write_text(f"Environment=LLAMA_SERVER_PATH={wrapper}\n")
+            config_path = wrapper.with_suffix(".json")
+            old_config = json.loads(config_path.read_text())
+            old_config.pop("guard_revision")
+            config_path.write_text(json.dumps(old_config))
+            installer.peer = None
+            self.assertFalse(installer._llama_guard_ready())
+            installer.peer = self.peer
+            wrapper.write_text("old wrapper")
+            (default / "llama-server").unlink()
+            (default / "llama-server").symlink_to("missing-old-runtime")
+            installer.peer = None
+            self.assertFalse(installer._llama_guard_ready())
+            with patch.object(installer, "preflight"), \
+                 patch("dual_spark.operations.connectx_cable_present", return_value=False):
+                installer.verify_standalone()
+            self.assertTrue(installer._llama_guard_ready())
+            self.assertIn("guard_revision", json.loads(config_path.read_text()))
+
+    def test_standalone_refresh_refuses_to_downgrade_newer_guard(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            default = home / ".unsloth/llama.cpp"
+            managed = home / ".local/share/connect-dual-spark/llama-src"
+            default.mkdir(parents=True)
+            managed.mkdir(parents=True)
+            installer = Installer(object())
+            installer.home = home
+            installer.source = managed
+            installer.server = managed / "build/bin/llama-server"
+            installer.server.parent.mkdir(parents=True)
+            installer.server.write_text("binary")
+            installer.studio = home / "unsloth"
+            installer.studio.write_text("installed")
+            installer.unit = home / "studio.service"
+            installer.peer = self.peer
+            installer.install_llama_guard()
+            wrapper = installer._llama_wrapper_path()
+            installer.unit.write_text(f"Environment=LLAMA_SERVER_PATH={wrapper}\n")
+            config_path = wrapper.with_suffix(".json")
+            newer = json.loads(config_path.read_text())
+            newer["guard_revision"] += 1
+            config_path.write_text(json.dumps(newer))
+            wrapper.write_text("newer wrapper")
+            installer.peer = None
+            with patch.object(installer, "preflight"), \
+                 patch("dual_spark.operations.connectx_cable_present", return_value=False):
+                with self.assertRaisesRegex(RuntimeError, "newer"):
+                    installer.verify_standalone()
+            self.assertEqual(wrapper.read_text(), "newer wrapper")
 
 
 if __name__ == "__main__":

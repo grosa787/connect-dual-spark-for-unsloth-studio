@@ -4,11 +4,13 @@
 
 Connect Dual Spark automatically discovers the direct ConnectX-7 link between exactly two NVIDIA DGX Spark systems, installs Unsloth Studio, and configures `llama.cpp` RPC on the second Spark. Inter-node model traffic is allowed only over the verified high-speed ConnectX-7 interface.
 
-> **Pre-release status:** The project passes automated static and package-structure checks, but a complete clean installation has not yet been validated on a physical pair of DGX Spark systems. Treat version 0.4.0 as a pre-release and test it on the target hardware before production use.
+> **Pre-release status:** The project passes automated static and package-structure checks, but a complete clean installation has not yet been validated on a physical pair of DGX Spark systems. Treat version 0.5.0 as a pre-release and test it on the target hardware before production use.
+
+Standalone operation is available only after a successful installation and pairing of two Sparks. The initial installation still requires both systems and their direct ConnectX-7 link. Later, if every local ConnectX-7 interface has no carrier, the guarded `llama-server` can run on the primary Spark alone and lets Unsloth/`llama.cpp` fit the model to the available local memory. This does not guarantee that a model sized for two Sparks will fit on one.
 
 ## Requirements
 
-- Exactly two NVIDIA DGX Spark systems running Ubuntu ARM64.
+- Exactly two NVIDIA DGX Spark systems running Ubuntu ARM64. Both are required for the initial installation and pairing.
 - A physical QSFP cable between the ConnectX-7 ports on both systems.
 - A cluster configured in advance with [NVIDIA Sync Cluster Assistant](https://docs.nvidia.com/sync/latest/cluster-assistant.html).
 - Passwordless SSH between the nodes. The installer discovers the second Spark's address and user automatically; you do not enter them manually.
@@ -67,7 +69,7 @@ The source launcher is intended for development and requires the adjacent `dual_
 ## Build the self-contained `.run` release
 
 ```bash
-./scripts/build_run.sh 0.4.0
+./scripts/build_run.sh 0.5.0
 ./dist/Connect-Dual-Spark-arm64.run --verify
 ```
 
@@ -78,8 +80,8 @@ The build script packages the current `dual_spark` module, removes Python caches
 The Debian package targets the `arm64` architecture:
 
 ```bash
-./scripts/build_deb.sh 0.4.0
-sudo apt install ./dist/connect-dual-spark_0.4.0_arm64.deb
+./scripts/build_deb.sh 0.5.0
+sudo apt install ./dist/connect-dual-spark_0.5.0_arm64.deb
 ```
 
 After installation, launch **Connect Dual Spark** from the application menu or run:
@@ -116,8 +118,8 @@ connect-dual-spark --lang en status
 - `install` performs the complete setup and offers to launch Studio after all checks pass.
 - `check` only verifies the environment, link, route, and SSH; it does not modify packages or configuration.
 - `start-rpc` checks the RPC system service, starts it when necessary, and opens a log window.
-- `studio` verifies the current ConnectX-7 link and RPC configuration, then starts the configured Studio service. Use it after installation, including from the terminal that ran the installer.
-- `status` reports the link, RPC, and Studio configuration state.
+- `studio` starts the configured Studio service after checking the paired link, or the saved standalone setup when no ConnectX-7 cable is active.
+- `status` reports whether the Spark is paired or standalone, along with RPC and Studio configuration state.
 
 `--lang en` forces English, `--lang ru` forces Russian, and `--lang auto` checks `CONNECT_DUAL_SPARK_LANG` before the system locale. The option works before or after the command, for example `connect-dual-spark status --lang ru`. If the option is omitted, auto selection is used. This setting localizes the installer's own prompts, progress, and status messages; diagnostics printed by operating-system commands or third-party tools may remain in English.
 
@@ -125,19 +127,27 @@ After a power cycle, RPC on the second Spark starts automatically as the system 
 
 Environment variables for ordinary new terminals are also saved in `.bashrc` and `environment.d`. Running `install` again checks and repairs the same managed configuration; it does not run `git pull` or update source versions automatically.
 
-For GGUF model loads, the installer places a standalone guard at both the default Unsloth `llama-server` path (`~/.unsloth/llama.cpp/llama-server`) and the Connect Dual Spark managed path (`~/.local/share/connect-dual-spark/llama-src/llama-server`). This also protects Studio when it is started externally through its API and does not inherit `LLAMA_ARG_RPC`. Before starting a model, the guard requires the discovered ConnectX-7 route and the RPC worker at port `50053` to be reachable. A `--list-devices` probe includes both `CUDA0` and `RPC0`. For model loads, the guard places these options last in the final `llama.cpp` command, so they override conflicting earlier device choices:
+For GGUF model loads, the installer places a persistent guard at both the default Unsloth `llama-server` path (`~/.unsloth/llama.cpp/llama-server`) and the Connect Dual Spark managed path (`~/.local/share/connect-dual-spark/llama-src/llama-server`). This also protects Studio when it is started externally through its API and does not inherit `LLAMA_ARG_RPC`.
+
+After the initial two-Spark installation, the guard selects one of two runtime modes:
+
+- If any local ConnectX-7 interface has carrier and the RPC worker at port `50053` is reachable through the verified route, a `--list-devices` probe includes both `CUDA0` and `RPC0`. For model loads, the guard places the following options last in the final `llama.cpp` command, so they override conflicting earlier device choices and keep the forced 1:1 split:
 
 ```text
 --rpc discovered-peer:50053 --device CUDA0,RPC0 --split-mode layer --tensor-split 1,1 --n-gpu-layers all
 ```
 
-If the verified route or worker is unavailable, the guard refuses the model load instead of running the GGUF solely on the primary Spark. It also rejects `-ot` / `--override-tensor` placement overrides that could pin all weights to one device. Its scope is GGUF inference launched through `llama-server` at the default or managed paths above. An explicitly configured alternate binary or another backend bypasses this guard. If an Unsloth update replaces either guard symlink, rerun `connect-dual-spark install` to restore the guard before loading another model.
+- If every local ConnectX-7 interface reports no carrier, or the [hot-plugged ConnectX-7 NICs are absent without a cable](https://forums.developer.nvidia.com/t/the-100g-network-interface-card-nic-is-not-visible-in-the-operating-system/367149), the guard enters standalone mode using the saved pair configuration. It removes stale RPC arguments, two-Spark device and split settings, and their related environment settings before starting the local `llama-server`. No 1:1 split is imposed; Unsloth/`llama.cpp` decides what fits in the primary Spark's local memory. An oversized model may still fail to load.
+
+The mode is chosen when a model starts. Unload and reload after disconnecting a cable to switch an active paired model to local mode, or after reconnecting to distribute an active standalone model across both Sparks. After upgrading the package while disconnected, `connect-dual-spark studio` refreshes the saved guard before starting Studio; the first installation still requires both Sparks.
+
+If any local ConnectX-7 interface has carrier but the verified route or RPC worker is unavailable, the guard fails closed and refuses the model load. This avoids silently running locally while the cable appears connected or sending model traffic over another network. In connected mode it also rejects `-ot` / `--override-tensor` placement overrides that could pin all weights to one device. The guard's scope is GGUF inference launched through `llama-server` at the default or managed paths above. An explicitly configured alternate binary or another backend bypasses this guard. If an Unsloth update replaces either guard symlink, rerun `connect-dual-spark install` to restore the guard before loading another model.
 
 ## ConnectX-7 route guarantee
 
 The installer rejects addresses from Wi-Fi, ordinary Ethernet, and management networks. It selects only an active ConnectX-7 interface with a private IPv4 address and negotiated speed of at least 100 Gbit/s, then verifies both outbound and return routes.
 
-RPC binds to the second Spark's ConnectX-7 address, and Studio receives exactly that address through `LLAMA_ARG_RPC`. The installer sets `UNSLOTH_LLAMA_CPP_PATH` to the locally built `llama.cpp` and `LLAMA_SERVER_PATH` to the guarded binary for the Studio service, shell, and `environment.d`. The guarded default and managed `llama-server` paths enforce the same endpoint even when those environment variables are absent. If the verified route disappears, installation, validation, or a guarded model load fails; model traffic does not automatically fall back to a slower network or to host-only execution. Internet downloads and other external traffic may continue to use the regular connection.
+RPC binds to the second Spark's ConnectX-7 address, and Studio receives exactly that address through `LLAMA_ARG_RPC`. The installer sets `UNSLOTH_LLAMA_CPP_PATH` to the locally built `llama.cpp` and `LLAMA_SERVER_PATH` to the guarded binary for the Studio service, shell, and `environment.d`. In connected mode, the guarded default and managed `llama-server` paths enforce the same endpoint even when those environment variables are absent. Installation and validation always require the verified two-Spark route. After installation, host-only execution is allowed only when every local ConnectX-7 interface has no carrier; if any has carrier, a missing verified route or worker remains an error. Model traffic never falls back to a slower network. Internet downloads and other external traffic may continue to use the regular connection.
 
 Do not expose the `llama.cpp` RPC protocol to a public or untrusted network. Keep the ConnectX-7 subnet isolated and do not publish the RPC port on management interfaces.
 

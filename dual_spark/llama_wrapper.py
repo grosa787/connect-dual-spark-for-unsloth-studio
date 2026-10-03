@@ -2,14 +2,17 @@
 """Standalone llama-server entry point that always uses the selected Spark pair."""
 
 import json
+import ipaddress
 import os
 from pathlib import Path
+import re
 import socket
 import subprocess
 import sys
 
 
 INFORMATIONAL_FLAGS = {"--help", "-h", "--version"}
+GUARD_REVISION = 2
 DEVICE_QUERY_FLAGS = {"--list-devices"}
 OVERRIDDEN_ENV = {
     "CUDA_VISIBLE_DEVICES", "LLAMA_ARG_DEVICE", "LLAMA_ARG_RPC",
@@ -28,6 +31,48 @@ def device_query(args):
 def sanitize_device_env(environment):
     for name in OVERRIDDEN_ENV:
         environment.pop(name, None)
+
+
+def sanitize_local_env(environment):
+    for name in ("LLAMA_ARG_RPC", "LLAMA_ARG_TENSOR_SPLIT", "LLAMA_ARG_SPLIT_MODE"):
+        environment.pop(name, None)
+    if "RPC" in environment.get("LLAMA_ARG_DEVICE", "").upper():
+        environment.pop("LLAMA_ARG_DEVICE", None)
+
+
+def connectx_cable_present(sys_class_net=Path("/sys/class/net")):
+    """A missing hot-plugged NIC or all carriers down means no CX7 link."""
+    for interface in sys_class_net.iterdir():
+        driver = interface / "device/driver"
+        if not driver.is_symlink() or driver.resolve().name != "mlx5_core":
+            continue
+        carrier = (interface / "carrier").read_text(encoding="ascii").strip()
+        if carrier == "1":
+            return True
+        if carrier != "0":
+            raise RuntimeError(f"Cannot determine ConnectX cable state on {interface.name}")
+    return False
+
+
+def validate_saved_pair(config):
+    required = {"binary", "host_ip", "host_iface", "rpc"}
+    if not isinstance(config, dict) or set(config) not in (required, required | {"guard_revision"}):
+        raise RuntimeError("saved pair configuration is incomplete")
+    if "guard_revision" in config and (type(config["guard_revision"]) is not int or config["guard_revision"] < 1):
+        raise RuntimeError("saved pair guard revision is invalid")
+    if not all(isinstance(config[key], str) and config[key] for key in required):
+        raise RuntimeError("saved pair configuration is invalid")
+    if not Path(config["binary"]).is_absolute() or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,15}", config["host_iface"]):
+        raise RuntimeError("saved pair paths or interface are invalid")
+    try:
+        host = ipaddress.ip_address(config["host_ip"])
+        worker_text, port_text = config["rpc"].rsplit(":", 1)
+        worker = ipaddress.ip_address(worker_text)
+        port = int(port_text)
+    except ValueError as exc:
+        raise RuntimeError("saved pair network addresses are invalid") from exc
+    if any(not isinstance(ip, ipaddress.IPv4Address) or not ip.is_private for ip in (host, worker)) or host == worker or not 1 <= port <= 65535:
+        raise RuntimeError("saved pair network addresses are invalid")
 
 
 def reject_placement_overrides(args, environment):
@@ -52,6 +97,30 @@ def _probe_args(args):
             continue
         filtered.append(arg)
     return filtered
+
+
+def local_command(binary, args):
+    """Remove stale two-node flags and let Studio/llama.cpp decide local fit."""
+    result = []
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        name = arg.split("=", 1)[0].replace("_", "-")
+        if name in ("--rpc", "--tensor-split", "-ts", "--split-mode", "-sm"):
+            index += 1 if "=" in arg else 2
+            continue
+        if name in ("--device", "-dev"):
+            value = arg.split("=", 1)[1] if "=" in arg else (args[index + 1] if index + 1 < len(args) else "")
+            if "RPC" in value.upper():
+                index += 1 if "=" in arg else 2
+                continue
+            if "=" not in arg and index + 1 < len(args):
+                result.extend((arg, value))
+                index += 2
+                continue
+        result.append(arg)
+        index += 1
+    return [binary, *result]
 
 
 def enforced_command(binary, args, endpoint):
@@ -89,24 +158,35 @@ def require_peer(config):
         conn.connect((worker_ip, int(port)))
 
 
-def main(args=None):
+def main(args=None, config_path=None):
     args = sys.argv[1:] if args is None else args
-    config_path = Path(__file__).resolve().with_suffix(".json")
+    config_path = Path(config_path) if config_path is not None else Path(__file__).resolve().with_suffix(".json")
     config = json.loads(config_path.read_text(encoding="utf-8"))
+    validate_saved_pair(config)
     binary = config["binary"]
     if Path(binary).resolve() == Path(__file__).resolve() or not Path(binary).is_file():
         raise RuntimeError("Configured llama-server binary is missing or points back to the wrapper")
-    if not informational(args):
+    if informational(args):
+        command = [binary, *args]
+    elif connectx_cable_present():
         if not device_query(args):
             reject_placement_overrides(args, os.environ)
         sanitize_device_env(os.environ)
         require_peer(config)
+        command = enforced_command(binary, args, config["rpc"])
         if not device_query(args):
             print(
                 f"Connect Dual Spark: enforcing RPC {config['rpc']}, CUDA0+RPC0, and a 1:1 tensor split",
                 file=sys.stderr, flush=True,
             )
-    os.execv(binary, enforced_command(binary, args, config["rpc"]))
+    else:
+        sanitize_local_env(os.environ)
+        command = local_command(binary, _probe_args(args) if device_query(args) else args)
+        if connectx_cable_present():
+            raise RuntimeError("ConnectX-7 reconnected during standalone launch; retry the model load")
+        if not device_query(args):
+            print("Connect Dual Spark: no ConnectX cable; loading locally with Studio's memory settings", file=sys.stderr, flush=True)
+    os.execv(binary, command)
 
 
 if __name__ == "__main__":

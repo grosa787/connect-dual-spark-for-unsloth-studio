@@ -14,6 +14,7 @@ from urllib import request
 
 from .configuration import bashrc_with_rpc, rpc_command, rpc_system_unit, studio_unit
 from .language import msg
+from .llama_wrapper import GUARD_REVISION, connectx_cable_present, validate_saved_pair
 from .probe import ClusterProbe
 from .system import CommandFailure, remote_cmd, remote_ssh
 
@@ -142,16 +143,13 @@ class Installer:
     def _llama_guard_config(self, binary):
         return {
             "binary": str(binary),
+            "guard_revision": GUARD_REVISION,
             "host_ip": self.peer.host_ip,
             "host_iface": self.peer.host_iface,
             "rpc": f"{self.peer.worker_ip}:{RPC_PORT}",
         }
 
-    def install_llama_guard(self, binary_override=None):
-        """Guard both Studio's managed and default GGUF binary search paths."""
-        binary = Path(binary_override) if binary_override else self.server
-        if not binary.is_absolute() or not binary.is_file():
-            raise RuntimeError(msg("Built llama-server binary is missing", "Собранный исполняемый файл llama-server не найден"))
+    def _write_llama_wrapper(self):
         wrapper = self._llama_wrapper_path()
         wrapper.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         source = Path(__file__).with_name("llama_wrapper.py")
@@ -163,19 +161,14 @@ class Installer:
             os.replace(temporary, wrapper)
         finally:
             temporary.unlink(missing_ok=True)
-        config = wrapper.with_suffix(".json")
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=wrapper.parent, delete=False) as tmp:
-            json.dump(self._llama_guard_config(binary), tmp)
-            tmp.write("\n")
-            temporary = Path(tmp.name)
-        try:
-            temporary.chmod(0o600)
-            os.replace(temporary, config)
-        finally:
-            temporary.unlink(missing_ok=True)
+        return wrapper
+
+    def _link_llama_wrapper(self, wrapper):
         for root in (self.home / ".unsloth/llama.cpp", self.source):
             if not root.is_dir():
                 continue
+            if root.is_symlink():
+                raise RuntimeError(msg("Refusing to replace llama-server inside an external linked directory", "Нельзя заменять llama-server внутри стороннего каталога-ссылки"))
             link = root / "llama-server"
             if link.is_symlink() and link.resolve() == wrapper.resolve():
                 continue
@@ -192,19 +185,86 @@ class Installer:
             temporary_link.symlink_to(wrapper)
             os.replace(temporary_link, link)
 
+    def install_llama_guard(self, binary_override=None):
+        """Guard both Studio's managed and default GGUF binary search paths."""
+        binary = Path(binary_override) if binary_override else self.server
+        if not binary.is_absolute() or not binary.is_file():
+            raise RuntimeError(msg("Built llama-server binary is missing", "Собранный исполняемый файл llama-server не найден"))
+        wrapper = self._write_llama_wrapper()
+        config = wrapper.with_suffix(".json")
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=wrapper.parent, delete=False) as tmp:
+            json.dump(self._llama_guard_config(binary), tmp)
+            tmp.write("\n")
+            temporary = Path(tmp.name)
+        try:
+            temporary.chmod(0o600)
+            os.replace(temporary, config)
+        finally:
+            temporary.unlink(missing_ok=True)
+        self._link_llama_wrapper(wrapper)
+
+    def _refresh_stored_llama_guard(self):
+        """Update only the guard code and links after a package upgrade offline."""
+        config_path = self._llama_wrapper_path().with_suffix(".json")
+        try:
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise RuntimeError(msg("No saved two-Spark guard to refresh", "Нет сохранённой защиты пары Spark для обновления")) from exc
+        try:
+            validate_saved_pair(config)
+        except RuntimeError as exc:
+            raise RuntimeError(msg("Saved two-Spark guard configuration is invalid", "Сохранённая настройка защиты пары Spark недопустима")) from exc
+        if config.get("guard_revision", 1) > GUARD_REVISION:
+            raise RuntimeError(msg("A newer two-Spark guard is installed; update this package before refreshing it", "Установлена более новая защита пары Spark; обновите этот пакет перед её восстановлением"))
+        if config["binary"] != str(self.server) or not self.server.is_file():
+            raise RuntimeError(msg("Saved two-Spark guard configuration is incomplete", "Сохранённая настройка защиты пары Spark неполная"))
+        if not config["rpc"].endswith(f":{RPC_PORT}"):
+            raise RuntimeError(msg("Saved RPC endpoint is invalid", "Сохранённый адрес RPC недопустим"))
+        for root in (self.home / ".unsloth/llama.cpp", self.source):
+            if not root.is_dir() or root.is_symlink():
+                raise RuntimeError(msg("Saved llama.cpp installation is missing or externally linked", "Сохранённая установка llama.cpp отсутствует или является сторонней ссылкой"))
+        config["guard_revision"] = GUARD_REVISION
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=config_path.parent, delete=False) as tmp:
+            json.dump(config, tmp)
+            tmp.write("\n")
+            temporary = Path(tmp.name)
+        try:
+            temporary.chmod(0o600)
+            os.replace(temporary, config_path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        wrapper = self._write_llama_wrapper()
+        self._link_llama_wrapper(wrapper)
+
     def _llama_guard_ready(self):
         wrapper = self._llama_wrapper_path()
         try:
             config = json.loads(wrapper.with_suffix(".json").read_text(encoding="utf-8"))
-            if config != self._llama_guard_config(self.server) or not wrapper.is_file():
+            validate_saved_pair(config)
+            if not wrapper.is_file() or config.get("binary") != str(self.server):
+                return False
+            if config.get("guard_revision") != GUARD_REVISION:
+                return False
+            if wrapper.read_bytes() != Path(__file__).with_name("llama_wrapper.py").read_bytes():
+                return False
+            if self.peer is not None and config != self._llama_guard_config(self.server):
                 return False
             return all(
                 (root / "llama-server").is_symlink()
                 and (root / "llama-server").resolve() == wrapper.resolve()
                 for root in (self.home / ".unsloth/llama.cpp", self.source)
             )
-        except (OSError, ValueError, KeyError):
+        except (OSError, ValueError, KeyError, RuntimeError):
             return False
+
+    def _stored_rpc_endpoint(self):
+        try:
+            endpoint = json.loads(self._llama_wrapper_path().with_suffix(".json").read_text(encoding="utf-8"))["rpc"]
+        except (OSError, ValueError, KeyError) as exc:
+            raise RuntimeError(msg("No saved two-Spark configuration; connect both Sparks and run the installer first", "Не сохранена настройка пары Spark; подключите оба Spark и сначала запустите установщик")) from exc
+        if not isinstance(endpoint, str) or not endpoint.endswith(f":{RPC_PORT}"):
+            raise RuntimeError(msg("Saved RPC endpoint is invalid", "Сохранённый адрес RPC недопустим"))
+        return endpoint
 
     def prepare_llama_guard(self):
         if self._host_model_active():
@@ -456,6 +516,21 @@ class Installer:
         if f"LLAMA_ARG_RPC={peer.worker_ip}:{RPC_PORT}" not in environment or f"UNSLOTH_LLAMA_CPP_PATH={self.source}" not in environment or f"LLAMA_SERVER_PATH={self._llama_wrapper_path()}" not in environment:
             raise RuntimeError(msg("Desktop login RPC configuration differs from discovered peer", "Адрес RPC в настройках рабочего стола не совпадает с обнаруженным вторым Spark"))
 
+    def verify_standalone(self):
+        self.preflight()
+        if connectx_cable_present():
+            raise RuntimeError(msg("ConnectX-7 cable is present; verify the paired Spark instead", "Кабель ConnectX-7 подключён; проверьте работу пары Spark"))
+        if not self.studio.is_file() or not self.server.is_file():
+            raise RuntimeError(msg("Standalone mode requires a completed two-Spark setup; connect both Sparks and run the installer first", "Для автономного режима нужна завершённая настройка пары; подключите оба Spark и сначала запустите установщик"))
+        if not self._llama_guard_ready():
+            self._refresh_stored_llama_guard()
+        if not self._llama_guard_ready():
+            raise RuntimeError(msg("Standalone guard could not be restored from the saved pair", "Не удалось восстановить автономную защиту из сохранённой настройки пары"))
+        unit = self.unit.read_text(encoding="utf-8") if self.unit.is_file() else ""
+        if f"LLAMA_SERVER_PATH={self._llama_wrapper_path()}" not in unit:
+            raise RuntimeError(msg("Studio is not pinned to the guarded llama-server", "Studio не закреплена за защищённым llama-server"))
+        self._stored_rpc_endpoint()
+
     def perform(self, stage):
         getattr(self, stage)()
 
@@ -476,8 +551,9 @@ class Installer:
             if pid <= 0:
                 raise RuntimeError(msg("Existing Studio service has no process", "У существующей службы Studio нет работающего процесса"))
             process_environment = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+            endpoint = f"{self.peer.worker_ip}:{RPC_PORT}" if self.peer is not None else self._stored_rpc_endpoint()
             required = {
-                f"LLAMA_ARG_RPC={self.peer.worker_ip}:{RPC_PORT}".encode(),
+                f"LLAMA_ARG_RPC={endpoint}".encode(),
                 f"UNSLOTH_LLAMA_CPP_PATH={self.source}".encode(),
                 f"LLAMA_SERVER_PATH={self._llama_wrapper_path()}".encode(),
             }
@@ -508,6 +584,14 @@ class Installer:
         return True
 
     def status(self):
+        self.preflight()
+        if not connectx_cable_present():
+            configured = self.studio.is_file() and self.server.is_file() and self._llama_guard_ready()
+            print(msg("    Mode: standalone (no ConnectX-7 link)", "    Режим: один Spark (нет соединения ConnectX-7)") if configured else msg("    Mode: disconnected and unconfigured", "    Режим: соединение отсутствует, настройка не завершена"))
+            print(f"    Studio: {msg('installed', 'установлено') if self.studio.is_file() else msg('missing', 'отсутствует')}")
+            print(f"    {msg('Local llama.cpp', 'Локальная llama.cpp')}: {msg('installed', 'установлено') if self.server.is_file() else msg('missing', 'отсутствует')}")
+            print(f"    {msg('Standalone GGUF guard', 'Защита автономной загрузки GGUF')}: {msg('configured', 'настроена') if self._llama_guard_ready() else msg('missing', 'отсутствует')}")
+            return
         self.detect_cluster()
         installed = msg("installed", "установлено")
         missing = msg("missing", "отсутствует")
