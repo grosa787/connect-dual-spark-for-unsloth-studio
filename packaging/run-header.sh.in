@@ -87,7 +87,7 @@ run_installer() {
 
     command -v python3 >/dev/null 2>&1 || fail 'python3 не найден.'
     command -v gnome-terminal >/dev/null 2>&1 || \
-        fail 'для установки и видимого worker RPC требуется GNOME Terminal.'
+        fail 'для установки и просмотра журнала RPC требуется GNOME Terminal.'
     [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]] || \
         fail 'графический сеанс GNOME не найден; запустите файл на рабочем столе DGX Spark.'
 

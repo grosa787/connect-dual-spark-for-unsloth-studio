@@ -12,20 +12,15 @@ import tempfile
 import time
 from urllib import request
 
-from .configuration import bashrc_with_rpc, rpc_command, studio_unit
+from .configuration import bashrc_with_rpc, rpc_command, rpc_system_unit, studio_unit
 from .probe import ClusterProbe
 from .system import CommandFailure, remote_cmd, remote_ssh
 
 
 RPC_PORT = 50053
+RPC_SERVICE = "connect-dual-spark-rpc.service"
 STUDIO_PORT = 8888
 MODEL = "unsloth/Qwen3-0.6B-GGUF:UD-Q4_K_XL"
-
-
-def rpc_launcher_script(peer, port=RPC_PORT):
-    binary = f"{peer.worker_home}/.local/share/connect-dual-spark/llama-src/build/bin/ggml-rpc-server"
-    args = rpc_command(binary, peer.worker_ip, port)
-    return "#!/usr/bin/env bash\nset -Eeuo pipefail\nexec " + shlex.join(args) + "\n"
 
 
 def smoke_command(binary, peer, rpc_port=RPC_PORT, smoke_port=18765):
@@ -173,42 +168,131 @@ class Installer:
         self.runner.run_task(remote_ssh(peer, remote_cmd("cmake", "--build", f"{dest}/build", "--target", "ggml-rpc-server", "-j", "4")), label="Build worker RPC server", timeout=3600)
         self._worker(remote_cmd("test", "-x", f"{dest}/build/bin/ggml-rpc-server"))
 
-    def _rpc_pid(self):
+    def _rpc_binary(self):
+        return f"{self.peer.worker_home}/.local/share/connect-dual-spark/llama-src/build/bin/ggml-rpc-server"
+
+    def _rpc_unit_text(self):
         peer = self.peer
-        output = self._worker("pgrep -af '[g]gml-rpc-server' || true")
-        expected = f"{peer.worker_home}/.local/share/connect-dual-spark/llama-src/build/bin/ggml-rpc-server"
-        return any(expected in line and f"--host {peer.worker_ip}" in line and f"--port {RPC_PORT}" in line for line in output.splitlines())
+        return rpc_system_unit(peer.worker_user, peer.worker_home, self._rpc_binary(), peer.worker_ip, RPC_PORT)
+
+    def _rpc_service_pid(self):
+        try:
+            if self._worker(remote_cmd("systemctl", "is-active", RPC_SERVICE)).strip() != "active":
+                return None
+            pid = int(self._worker(remote_cmd("systemctl", "show", "-p", "MainPID", "--value", RPC_SERVICE)).strip())
+            return pid if pid > 0 else None
+        except (CommandFailure, OSError, ValueError):
+            return None
+
+    def _rpc_service_owned(self):
+        pid = self._rpc_service_pid()
+        if pid is None:
+            return False
+        try:
+            listeners = self._worker("ss -H -ltnp 'sport = :50053'")
+        except CommandFailure:
+            return False
+        return any(
+            f"{self.peer.worker_ip}:{RPC_PORT}" in line and f"pid={pid}," in line
+            for line in listeners.splitlines()
+        )
+
+    def _rpc_runtime_correct(self):
+        pid = self._rpc_service_pid()
+        if pid is None:
+            return False
+        try:
+            if self._worker(remote_cmd("readlink", f"/proc/{pid}/exe")).strip() != self._rpc_binary():
+                return False
+            script = f"import json; from pathlib import Path; p=Path('/proc/{pid}/cmdline').read_bytes(); print(json.dumps([x.decode() for x in p.split(bytes([0])) if x]))"
+            argv = json.loads(self._worker(remote_cmd("python3", "-c", script)))
+            return argv == rpc_command(self._rpc_binary(), self.peer.worker_ip, RPC_PORT)
+        except (CommandFailure, OSError, ValueError):
+            return False
+
+    def _rpc_service_state(self):
+        """Confirm boot enablement, effective systemd settings, and exact argv."""
+        if not self._rpc_service_owned() or not self._rpc_runtime_correct():
+            return False
+        try:
+            if self._worker(remote_cmd("cat", f"/etc/systemd/system/{RPC_SERVICE}")) != self._rpc_unit_text():
+                return False
+            if self._worker(remote_cmd("systemctl", "is-enabled", RPC_SERVICE)).strip() != "enabled":
+                return False
+            raw = self._worker(remote_cmd(
+                "systemctl", "show", RPC_SERVICE,
+                "-p", "NeedDaemonReload", "-p", "DropInPaths", "-p", "FragmentPath",
+                "-p", "Restart", "-p", "User",
+            ))
+            properties = dict(line.split("=", 1) for line in raw.splitlines() if "=" in line)
+            return properties == {
+                "NeedDaemonReload": "no", "DropInPaths": "",
+                "FragmentPath": f"/etc/systemd/system/{RPC_SERVICE}",
+                "Restart": "always", "User": self.peer.worker_user,
+            }
+        except (CommandFailure, OSError, ValueError):
+            return False
+
+    def _rpc_service_dropins(self):
+        try:
+            return self._worker(remote_cmd("systemctl", "show", RPC_SERVICE, "-p", "DropInPaths", "--value")).strip()
+        except CommandFailure:
+            return ""
+
+    def _host_model_active(self):
+        return bool(self.runner.run(["bash", "-c", "pgrep -af '[l]lama-server' || true"]).strip())
+
+    def _show_rpc_logs(self):
+        peer = self.peer
+        ssh = remote_ssh(peer, remote_cmd("journalctl", "-u", RPC_SERVICE, "-n", "20", "-f", "--no-pager"), tty=True)
+        shell = """\n"$@"\nstatus=$?\nprintf '\\nRPC log viewer stopped (code %s). Press Enter to close.\\n' "$status"\nread -r _\nexit "$status"\n"""
+        subprocess.Popen(["gnome-terminal", "--title=Connect-Dual-Spark-RPC-Logs", "--", "bash", "-c", shell, "connect-dual-spark-rpc-logs", *ssh], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def start_rpc(self):
         peer = self.peer
-        if _tcp_open(peer.host_ip, peer.worker_ip, RPC_PORT):
-            if not self._rpc_pid():
-                raise RuntimeError("RPC port is occupied by an unknown process on the second Spark")
-            print("    Worker RPC already runs on the selected ConnectX-7 address")
+        dropins = self._rpc_service_dropins()
+        if dropins:
+            raise RuntimeError(f"Worker RPC has an existing systemd override ({dropins}); inspect it before installation")
+        if self._rpc_service_state() and _tcp_open(peer.host_ip, peer.worker_ip, RPC_PORT):
+            print("    Worker RPC system service is already active and enabled at boot")
+            self._show_rpc_logs()
             return
-        remote_script = f"{peer.worker_home}/.local/share/connect-dual-spark/run-rpc.sh"
-        script = rpc_launcher_script(peer)
+        port_open = _tcp_open(peer.host_ip, peer.worker_ip, RPC_PORT)
+        owned = port_open and self._rpc_service_owned()
+        if port_open and not owned:
+            raise RuntimeError("RPC port is occupied by an unmanaged process; stop the old terminal RPC before installing the boot service")
+        needs_restart = not (owned and self._rpc_runtime_correct())
+        defer_restart = needs_restart and self._host_model_active()
+        remote_unit = f"{peer.worker_home}/.local/share/connect-dual-spark/{RPC_SERVICE}"
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", delete=False) as tmp:
-            tmp.write(script)
-            local_script = tmp.name
+            tmp.write(self._rpc_unit_text())
+            local_unit = tmp.name
         try:
             ssh_transport = shlex.join(["ssh", "-b", peer.host_ip, "-o", f"BindInterface={peer.host_iface}", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new"])
-            self.runner.run_task(["rsync", "-a", "-e", ssh_transport, local_script, f"{peer.worker_user}@{peer.worker_ip}:{remote_script}"], label="Copy worker RPC launcher", timeout=60)
+            self.runner.run_task(["rsync", "-a", "-e", ssh_transport, local_unit, f"{peer.worker_user}@{peer.worker_ip}:{remote_unit}"], label="Stage worker RPC system unit", timeout=60)
         finally:
-            Path(local_script).unlink(missing_ok=True)
-        self._worker(remote_cmd("chmod", "700", remote_script))
-        ssh = remote_ssh(peer, remote_cmd("bash", remote_script), tty=True)
-        shell = """\n"$@"\nstatus=$?\nprintf '\\nWorker RPC stopped (code %s). Press Enter to close.\\n' "$status"\nread -r _\nexit "$status"\n"""
-        subprocess.Popen(["gnome-terminal", "--title=Connect-Dual-Spark-RPC", "--", "bash", "-c", shell, "connect-dual-spark-rpc", *ssh], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(30):
-            if _tcp_open(peer.host_ip, peer.worker_ip, RPC_PORT):
-                print("    Worker RPC is listening in its visible terminal")
+            Path(local_unit).unlink(missing_ok=True)
+        install = (
+            "set -e; "
+            + remote_cmd("install", "-o", "root", "-g", "root", "-m", "0644", remote_unit, f"/etc/systemd/system/{RPC_SERVICE}")
+            + "; systemctl daemon-reload; "
+            + remote_cmd("systemctl", "enable", RPC_SERVICE)
+        )
+        if needs_restart and not defer_restart:
+            install += "; " + remote_cmd("systemctl", "restart", RPC_SERVICE)
+        self.runner.run_interactive(remote_ssh(peer, "sudo bash -c " + shlex.quote(install), tty=True), label="Enable worker RPC at boot (sudo authorization)")
+        if defer_restart:
+            raise RuntimeError("Worker RPC boot service is enabled, but its running binary needs a restart; unload the current model and run connect-dual-spark start-rpc")
+        for _ in range(60):
+            if self._rpc_service_state() and _tcp_open(peer.host_ip, peer.worker_ip, RPC_PORT):
+                print("    Worker RPC system service is active and enabled at boot")
+                self._show_rpc_logs()
                 return
             time.sleep(1)
-        raise RuntimeError("Worker RPC did not start; inspect the Connect-Dual-Spark-RPC terminal")
+        raise RuntimeError("Worker RPC system service did not become reachable; inspect systemctl status connect-dual-spark-rpc.service on the second Spark")
 
     def smoke_test(self):
-        if self.runner.run(["bash", "-c", "pgrep -af '[l]lama-server' || true"]).strip():
+        if self._host_model_active():
             raise RuntimeError("Another llama-server is running. Stop its model before the temporary RPC smoke test")
         with socket.socket() as sock:
             sock.bind(("127.0.0.1", 0))
@@ -273,8 +357,8 @@ class Installer:
         peer = ClusterProbe(self.runner.run).detect()
         if peer.worker_ip != self.peer.worker_ip or peer.host_ip != self.peer.host_ip:
             raise RuntimeError("ConnectX-7 route changed after installation")
-        if not _tcp_open(peer.host_ip, peer.worker_ip, RPC_PORT) or not self._rpc_pid():
-            raise RuntimeError("Worker RPC is no longer listening on ConnectX-7")
+        if not _tcp_open(peer.host_ip, peer.worker_ip, RPC_PORT) or not self._rpc_service_state():
+            raise RuntimeError("Worker RPC boot service is not active and reachable on ConnectX-7")
         if not self.studio.is_file() or not self.server.is_file():
             raise RuntimeError("Unsloth Studio or llama.cpp server is missing")
         unit = self.unit.read_text(encoding="utf-8")
@@ -338,5 +422,8 @@ class Installer:
         self.detect_cluster()
         print(f"    Studio: {'installed' if self.studio.is_file() else 'missing'}")
         print(f"    llama.cpp: {'installed' if self.server.is_file() else 'missing'}")
-        print(f"    Worker RPC: {'listening' if _tcp_open(self.peer.host_ip, self.peer.worker_ip, RPC_PORT) else 'offline'}")
+        service_ready = self._rpc_service_state()
+        listening = _tcp_open(self.peer.host_ip, self.peer.worker_ip, RPC_PORT)
+        print(f"    Worker RPC boot service: {'enabled and active' if service_ready else 'not ready'}")
+        print(f"    Worker RPC CX7 listener: {'reachable' if listening else 'offline'}")
         print(f"    Studio unit: {'configured' if self.unit.is_file() else 'missing'}")

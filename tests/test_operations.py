@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import patch
+import json
 
-from dual_spark.operations import Installer, rpc_launcher_script, smoke_command, smoke_log_proves_rdma
+from dual_spark.operations import Installer, smoke_command, smoke_log_proves_rdma
 from dual_spark.probe import Peer
 
 
@@ -17,12 +18,6 @@ class OperationsTests(unittest.TestCase):
             hostname="spark-793d",
             speed_mbps=200000,
         )
-
-    def test_rpc_launcher_uses_only_selected_peer_and_cache(self):
-        script = rpc_launcher_script(self.peer, port=50053)
-        self.assertIn("--host 10.100.32.2 --port 50053 --cache", script)
-        self.assertNotIn("192.168.", script)
-        self.assertNotIn("0.0.0.0", script)
 
     def test_smoke_model_forces_a_remote_weight_split(self):
         command = smoke_command(
@@ -65,6 +60,126 @@ class OperationsTests(unittest.TestCase):
         self.assertEqual(len(seen), 1)
         self.assertIn("ethtool", " ".join(seen[0]))
         self.assertIn("rsync", " ".join(seen[0]))
+
+    def test_rpc_install_enables_system_service_and_terminal_only_shows_logs(self):
+        calls = {"tasks": [], "interactive": [], "terminal": []}
+
+        class Runner:
+            def run_task(self, args, **kwargs):
+                calls["tasks"].append(args)
+
+            def run_interactive(self, args, **kwargs):
+                calls["interactive"].append(args)
+
+        installer = Installer(Runner())
+        installer.peer = self.peer
+        with patch.object(installer, "_rpc_service_dropins", return_value=""), \
+             patch.object(installer, "_rpc_service_state", side_effect=[False, True]), \
+             patch.object(installer, "_host_model_active", return_value=False), \
+             patch("dual_spark.operations._tcp_open", side_effect=[False, True]), \
+             patch("dual_spark.operations.subprocess.Popen", side_effect=lambda args, **kwargs: calls["terminal"].append(args)):
+            installer.start_rpc()
+        command = " ".join(calls["interactive"][0])
+        self.assertIn("systemctl enable connect-dual-spark-rpc.service", command)
+        self.assertIn("systemctl restart connect-dual-spark-rpc.service", command)
+        self.assertIn("journalctl", " ".join(calls["terminal"][0]))
+        self.assertNotIn("ggml-rpc-server", " ".join(calls["terminal"][0]))
+
+    def test_active_rpc_service_can_be_enabled_without_disconnect(self):
+        commands = []
+
+        class Runner:
+            def run_task(self, args, **kwargs):
+                pass
+
+            def run_interactive(self, args, **kwargs):
+                commands.append(" ".join(args))
+
+        installer = Installer(Runner())
+        installer.peer = self.peer
+        with patch.object(installer, "_rpc_service_dropins", return_value=""), \
+             patch.object(installer, "_rpc_service_state", side_effect=[False, True]), \
+             patch.object(installer, "_rpc_service_owned", return_value=True), \
+             patch.object(installer, "_rpc_runtime_correct", return_value=True), \
+             patch.object(installer, "_show_rpc_logs"), \
+             patch("dual_spark.operations._tcp_open", return_value=True):
+            installer.start_rpc()
+        self.assertIn("systemctl enable connect-dual-spark-rpc.service", commands[0])
+        self.assertNotIn("systemctl restart", commands[0])
+
+    def test_active_model_defers_stale_worker_binary_restart(self):
+        commands = []
+
+        class Runner:
+            def run_task(self, args, **kwargs):
+                pass
+
+            def run_interactive(self, args, **kwargs):
+                commands.append(" ".join(args))
+
+        installer = Installer(Runner())
+        installer.peer = self.peer
+        with patch.object(installer, "_rpc_service_dropins", return_value=""), \
+             patch.object(installer, "_rpc_service_state", return_value=False), \
+             patch.object(installer, "_rpc_service_owned", return_value=True), \
+             patch.object(installer, "_rpc_runtime_correct", return_value=False), \
+             patch.object(installer, "_host_model_active", return_value=True), \
+             patch("dual_spark.operations._tcp_open", return_value=True):
+            with self.assertRaisesRegex(RuntimeError, "unload the current model"):
+                installer.start_rpc()
+        self.assertIn("systemctl enable connect-dual-spark-rpc.service", commands[0])
+        self.assertNotIn("systemctl restart", commands[0])
+
+    def test_existing_systemd_override_is_reported_before_install(self):
+        class Runner:
+            def run_task(self, *args, **kwargs):
+                raise AssertionError("must not change a service with an unknown override")
+
+        installer = Installer(Runner())
+        installer.peer = self.peer
+        with patch.object(installer, "_rpc_service_dropins", return_value="/etc/systemd/system/connect-dual-spark-rpc.service.d/custom.conf"):
+            with self.assertRaisesRegex(RuntimeError, "override"):
+                installer.start_rpc()
+
+    def test_ready_rpc_requires_boot_enablement_and_exact_runtime(self):
+        installer = Installer(object())
+        installer.peer = self.peer
+        binary = installer._rpc_binary()
+        properties = (
+            "NeedDaemonReload=no\nDropInPaths=\n"
+            "FragmentPath=/etc/systemd/system/connect-dual-spark-rpc.service\n"
+            "Restart=always\nUser=spark2\n"
+        )
+
+        def output(command):
+            if "cat /etc/systemd/system" in command:
+                return installer._rpc_unit_text()
+            if "is-enabled" in command:
+                return "enabled\n"
+            if "is-active" in command:
+                return "active\n"
+            if "MainPID" in command:
+                return "123\n"
+            if "ss -H" in command:
+                return 'LISTEN 0 1 10.100.32.2:50053 0.0.0.0:* users:(("ggml-rpc-server",pid=123,fd=3))\n'
+            if "readlink" in command:
+                return binary + "\n"
+            if "python3 -c" in command:
+                return json.dumps([binary, "--host", "10.100.32.2", "--port", "50053", "--cache"])
+            if "systemctl show" in command:
+                return properties
+            raise AssertionError(command)
+
+        with patch.object(installer, "_worker", side_effect=output):
+            self.assertTrue(installer._rpc_service_state())
+
+        def stale(command):
+            if "is-enabled" in command:
+                return "disabled\n"
+            return output(command)
+
+        with patch.object(installer, "_worker", side_effect=stale):
+            self.assertFalse(installer._rpc_service_state())
 
 
 if __name__ == "__main__":

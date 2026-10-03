@@ -1,6 +1,6 @@
 import unittest
 
-from dual_spark.configuration import bashrc_with_rpc, rpc_command, studio_unit
+from dual_spark.configuration import bashrc_with_rpc, rpc_command, rpc_system_unit, studio_unit
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -24,6 +24,17 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn(f"export UNSLOTH_LLAMA_CPP_PATH={source}", updated)
         self.assertEqual(updated, bashrc_with_rpc(updated, "10.100.32.2", 50053, source))
         self.assertIn("export PATH=$HOME/bin:$PATH", updated)
+
+    def test_worker_rpc_starts_at_boot_without_user_login(self):
+        binary = "/home/worker/.local/share/connect-dual-spark/llama-src/build/bin/ggml-rpc-server"
+        unit = rpc_system_unit("worker", "/home/worker", binary, "10.100.32.2", 50053)
+        self.assertIn("User=worker", unit)
+        self.assertIn("WantedBy=multi-user.target", unit)
+        self.assertIn("Restart=always", unit)
+        self.assertIn("StartLimitIntervalSec=0", unit)
+        self.assertIn(f"ExecStart={binary} --host 10.100.32.2 --port 50053 --cache", unit)
+        self.assertNotIn("WantedBy=default.target", unit)
+        self.assertNotIn("0.0.0.0", unit)
 
 
 if __name__ == "__main__":

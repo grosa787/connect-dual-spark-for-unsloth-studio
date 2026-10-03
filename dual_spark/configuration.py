@@ -21,6 +21,43 @@ def rpc_command(binary: str, address: str, port: int) -> list[str]:
     return [binary, "--host", private_ipv4(address), "--port", str(port), "--cache"]
 
 
+def rpc_system_unit(user: str, home: str, binary: str, address: str, port: int) -> str:
+    """A system service; multi-user.target runs it before anyone logs in."""
+    if not re.fullmatch(r"[a-z_][a-z0-9_-]*[$]?", user):
+        raise ValueError("Invalid worker username")
+    for path in (home, binary):
+        if not Path(path).is_absolute() or any(ch.isspace() for ch in path):
+            raise ValueError("Worker service paths must be absolute and contain no whitespace")
+    if not Path(binary).is_relative_to(home):
+        raise ValueError("Worker RPC binary must be inside its home directory")
+    command = " ".join(rpc_command(binary, address, port))
+    working_dir = Path(binary).parent.parent
+    return f"""[Unit]
+Description=Connect Dual Spark llama.cpp RPC on ConnectX-7
+Wants=network-online.target
+After=network-online.target
+RequiresMountsFor={home}
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User={user}
+Environment=HOME={home}
+WorkingDirectory={working_dir}
+ExecStart={command}
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+LimitMEMLOCK=infinity
+LimitNOFILE=65535
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+
 def bashrc_with_rpc(contents: str, address: str, port: int, source_dir: str | None = None) -> str:
     private_ipv4(address)
     if not 1 <= port <= 65535:

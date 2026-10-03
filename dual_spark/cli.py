@@ -12,7 +12,7 @@ LABELS = {
     "detect_cluster": "Проверка двух Spark и ConnectX-7",
     "install_studio": "Установка Unsloth Studio",
     "sync_and_build_rpc": "Синхронизация и сборка RPC на втором Spark",
-    "start_rpc": "Запуск RPC в отдельном терминале",
+    "start_rpc": "Автозапуск RPC на втором Spark и просмотр журнала",
     "smoke_test": "Пробный запуск небольшой GGUF-модели",
     "configure_studio": "Настройка Unsloth Studio",
     "verify_installation": "Итоговая проверка",
