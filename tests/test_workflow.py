@@ -19,6 +19,12 @@ class FakeSetup:
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_guard_is_ready_before_the_smoke_model_runs(self):
+        self.assertLess(
+            SetupWorkflow.STAGES.index("prepare_llama_guard"),
+            SetupWorkflow.STAGES.index("smoke_test"),
+        )
+
     def test_studio_choice_is_withheld_after_any_failed_check(self):
         for stage in SetupWorkflow.STAGES:
             with self.subTest(stage=stage):

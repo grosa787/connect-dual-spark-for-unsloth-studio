@@ -28,6 +28,7 @@ for source_path in \
     "$project_root/dual_spark/__init__.py" \
     "$project_root/dual_spark/cli.py" \
     "$project_root/dual_spark/language.py" \
+    "$project_root/dual_spark/llama_wrapper.py" \
     "$project_root/README.md" \
     "$project_root/README.ru.md" \
     "$project_root/LICENSE" \

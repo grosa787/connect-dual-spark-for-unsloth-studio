@@ -14,6 +14,7 @@ LABELS = {
     "install_studio": ("Installing Unsloth Studio", "Установка Unsloth Studio"),
     "sync_and_build_rpc": ("Syncing and building RPC on the second Spark", "Синхронизация и сборка RPC на втором Spark"),
     "start_rpc": ("Enabling worker RPC at boot and opening its log", "Автозапуск RPC на втором Spark и просмотр журнала"),
+    "prepare_llama_guard": ("Protecting external Studio GGUF loads", "Защита загрузки GGUF при внешнем запуске Studio"),
     "smoke_test": ("Testing a small GGUF model", "Пробный запуск небольшой GGUF-модели"),
     "configure_studio": ("Configuring Unsloth Studio", "Настройка Unsloth Studio"),
     "verify_installation": ("Final verification", "Итоговая проверка"),

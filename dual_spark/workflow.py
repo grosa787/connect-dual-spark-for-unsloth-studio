@@ -7,6 +7,7 @@ class SetupWorkflow:
         "install_studio",
         "sync_and_build_rpc",
         "start_rpc",
+        "prepare_llama_guard",
         "smoke_test",
         "configure_studio",
         "verify_installation",

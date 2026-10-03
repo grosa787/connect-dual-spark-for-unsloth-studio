@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import patch
 import json
+from pathlib import Path
+import tempfile
 
 from dual_spark.operations import Installer, smoke_command, smoke_log_proves_rdma
 from dual_spark.probe import Peer
@@ -19,14 +21,11 @@ class OperationsTests(unittest.TestCase):
             speed_mbps=200000,
         )
 
-    def test_smoke_model_forces_a_remote_weight_split(self):
-        command = smoke_command(
-            "/home/spark/.unsloth/llama.cpp/llama-server", self.peer, 50053, 18765
-        )
-        self.assertIn("--rpc", command)
-        self.assertEqual(command[command.index("--rpc") + 1], "10.100.32.2:50053")
-        self.assertEqual(command[command.index("--tensor-split") + 1], "1,1")
+    def test_smoke_uses_the_guarded_studio_binary(self):
+        command = smoke_command("/home/spark/.unsloth/llama.cpp/llama-server", 18765)
+        self.assertNotIn("--rpc", command)
         self.assertIn("unsloth/Qwen3-0.6B-GGUF:UD-Q4_K_XL", command)
+        self.assertEqual(command[0], "/home/spark/.unsloth/llama.cpp/llama-server")
         self.assertIn("127.0.0.1", command)
 
     def test_smoke_requires_remote_weights_and_activated_rdma(self):
@@ -180,6 +179,36 @@ class OperationsTests(unittest.TestCase):
 
         with patch.object(installer, "_worker", side_effect=stale):
             self.assertFalse(installer._rpc_service_state())
+
+    def test_installs_default_and_managed_llama_server_guards(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            default = home / ".unsloth/llama.cpp"
+            managed = home / ".local/share/connect-dual-spark/llama-src"
+            (default / "build/bin").mkdir(parents=True)
+            (managed / "build/bin").mkdir(parents=True)
+            binary = managed / "build/bin/llama-server"
+            binary.write_text("binary")
+            (default / "llama-server").symlink_to("build/bin/llama-server")
+
+            installer = Installer(object())
+            installer.home = home
+            installer.source = managed
+            installer.server = binary
+            installer.peer = self.peer
+            installer.install_llama_guard()
+            self.assertTrue(installer._llama_guard_ready())
+
+            wrapper = home / ".local/share/connect-dual-spark/llama-server-wrapper.py"
+            self.assertEqual((default / "llama-server").resolve(), wrapper.resolve())
+            self.assertEqual((managed / "llama-server").resolve(), wrapper.resolve())
+            self.assertEqual((default / "llama-server.before-connect-dual-spark").readlink(), Path("build/bin/llama-server"))
+            config = json.loads(wrapper.with_suffix(".json").read_text())
+            self.assertEqual(config["rpc"], "10.100.32.2:50053")
+            self.assertEqual(config["binary"], str(binary))
+            (default / "llama-server").unlink()
+            (default / "llama-server").symlink_to("build/bin/llama-server")
+            self.assertFalse(installer._llama_guard_ready())
 
 
 if __name__ == "__main__":

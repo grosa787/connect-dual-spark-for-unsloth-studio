@@ -60,16 +60,19 @@ WantedBy=multi-user.target
 """
 
 
-def bashrc_with_rpc(contents: str, address: str, port: int, source_dir: str | None = None) -> str:
+def bashrc_with_rpc(contents: str, address: str, port: int, source_dir: str | None = None, server_binary: str | None = None) -> str:
     private_ipv4(address)
     if not 1 <= port <= 65535:
         raise ValueError(msg("Invalid RPC port", "Недопустимый порт RPC"))
     if source_dir is not None and not Path(source_dir).is_absolute():
         raise ValueError(msg("llama.cpp source directory must be absolute", "Путь к исходникам llama.cpp должен быть абсолютным"))
+    if server_binary is not None and not Path(server_binary).is_absolute():
+        raise ValueError(msg("llama-server wrapper path must be absolute", "Путь к обёртке llama-server должен быть абсолютным"))
     begin = "# BEGIN Connect Dual Spark RPC"
     end = "# END Connect Dual Spark RPC"
     source_line = f"export UNSLOTH_LLAMA_CPP_PATH={shlex.quote(source_dir)}\n" if source_dir else ""
-    block = f"{begin}\nexport LLAMA_ARG_RPC={address}:{port}\n{source_line}{end}\n"
+    server_line = f"export LLAMA_SERVER_PATH={shlex.quote(server_binary)}\n" if server_binary else ""
+    block = f"{begin}\nexport LLAMA_ARG_RPC={address}:{port}\n{source_line}{server_line}{end}\n"
     pattern = re.compile(re.escape(begin) + r"\n.*?\n" + re.escape(end) + r"\n?", re.DOTALL)
     if begin in contents:
         if not pattern.search(contents):
@@ -78,13 +81,16 @@ def bashrc_with_rpc(contents: str, address: str, port: int, source_dir: str | No
     return contents.rstrip("\n") + "\n\n" + block
 
 
-def studio_unit(address: str, port: int, studio_binary: str, source_dir: str | None = None) -> str:
+def studio_unit(address: str, port: int, studio_binary: str, source_dir: str | None = None, server_binary: str | None = None) -> str:
     private_ipv4(address)
     if not 1 <= port <= 65535 or not Path(studio_binary).is_absolute():
         raise ValueError(msg("Invalid Studio service arguments", "Недопустимые параметры службы Studio"))
     if source_dir is not None and not Path(source_dir).is_absolute():
         raise ValueError(msg("llama.cpp source directory must be absolute", "Путь к исходникам llama.cpp должен быть абсолютным"))
+    if server_binary is not None and not Path(server_binary).is_absolute():
+        raise ValueError(msg("llama-server wrapper path must be absolute", "Путь к обёртке llama-server должен быть абсолютным"))
     source_environment = f"Environment=UNSLOTH_LLAMA_CPP_PATH={source_dir}\n" if source_dir else ""
+    server_environment = f"Environment=LLAMA_SERVER_PATH={server_binary}\n" if server_binary else ""
     return f"""[Unit]
 Description=Unsloth Studio with ConnectX-7 RPC
 After=network-online.target
@@ -93,7 +99,7 @@ After=network-online.target
 Type=simple
 UMask=0077
 Environment=LLAMA_ARG_RPC={address}:{port}
-{source_environment}ExecStart={studio_binary} studio --host 127.0.0.1 --port 8888 --silent
+{source_environment}{server_environment}ExecStart={studio_binary} studio --host 127.0.0.1 --port 8888 --silent
 Restart=on-failure
 RestartSec=10
 

@@ -41,6 +41,7 @@ for source_path in \
     "$project_root/dual_spark/__init__.py" \
     "$project_root/dual_spark/cli.py" \
     "$project_root/dual_spark/language.py" \
+    "$project_root/dual_spark/llama_wrapper.py" \
     "$project_root/packaging/run-header.sh.in"; do
     [[ -f "$source_path" ]] || fail "required source file not found: $source_path"
 done
