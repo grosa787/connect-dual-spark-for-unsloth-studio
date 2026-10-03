@@ -86,6 +86,50 @@ class CliLanguageTests(unittest.TestCase):
             self.assertEqual(main(["--lang", "en", "studio"]), 0)
         self.assertEqual(calls, ["verify_standalone", "launch_studio"])
 
+    def test_refresh_reconciles_unaware_unsloth_update_without_prompt(self):
+        calls = []
+
+        class FakeRunner:
+            log_path = Path("/tmp/connect-dual-spark-test.log")
+
+            def __init__(self, **kwargs):
+                pass
+
+        class FakeInstaller:
+            def __init__(self, runner):
+                pass
+
+            def refresh(self):
+                calls.append("refresh")
+
+        with patch("dual_spark.cli.Runner", FakeRunner), \
+             patch("dual_spark.cli.Installer", FakeInstaller), \
+             redirect_stdout(StringIO()):
+            self.assertEqual(main(["--lang", "en", "refresh"]), 0)
+        self.assertEqual(calls, ["refresh"])
+
+    def test_update_unsloth_runs_the_managed_update_transaction(self):
+        calls = []
+
+        class FakeRunner:
+            log_path = Path("/tmp/connect-dual-spark-test.log")
+
+            def __init__(self, **kwargs):
+                pass
+
+        class FakeInstaller:
+            def __init__(self, runner):
+                pass
+
+            def update_unsloth(self):
+                calls.append("update-unsloth")
+
+        with patch("dual_spark.cli.Runner", FakeRunner), \
+             patch("dual_spark.cli.Installer", FakeInstaller), \
+             redirect_stdout(StringIO()):
+            self.assertEqual(main(["update-unsloth"]), 0)
+        self.assertEqual(calls, ["update-unsloth"])
+
 
 if __name__ == "__main__":
     unittest.main()

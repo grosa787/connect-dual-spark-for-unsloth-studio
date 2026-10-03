@@ -72,7 +72,7 @@ def main(argv=None):
     parser._positionals.title = msg("commands", "Команды")
     parser._optionals.title = msg("options", "Параметры")
     parser.add_argument("-h", "--help", action="help", help=msg("show this help message and exit", "показать справку и выйти"))
-    parser.add_argument("command", choices=("install", "check", "start-rpc", "status", "studio"), nargs="?", default="install")
+    parser.add_argument("command", choices=("install", "check", "start-rpc", "status", "studio", "refresh", "update-unsloth"), nargs="?", default="install")
     parser.add_argument("--lang", choices=("en", "ru", "auto"), default="auto", help=msg("installer language (default: system locale)", "язык установщика (по умолчанию: язык системы)"))
     parser.add_argument("--verbose", action="store_true", help=msg("show task output as it completes", "показывать вывод задач по завершении"))
     args = parser.parse_args(argv)
@@ -91,6 +91,12 @@ def main(argv=None):
             installer.detect_cluster()
             installer.start_rpc()
             print(msg("✓ RPC is running", "✓ RPC запущен"))
+        elif args.command == "refresh":
+            installer.refresh()
+            print(msg("✓ Fastload matches the installed Unsloth version", "✓ Быстрая загрузка соответствует установленной версии Unsloth"))
+        elif args.command == "update-unsloth":
+            installer.update_unsloth()
+            print(msg("✓ Unsloth and the fastload pair are updated", "✓ Unsloth и пара быстрой загрузки обновлены"))
         elif args.command == "studio":
             if connectx_cable_present():
                 installer.detect_cluster()

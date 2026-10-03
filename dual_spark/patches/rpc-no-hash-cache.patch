@@ -1,0 +1,15 @@
+diff --git a/ggml/src/ggml-rpc/ggml-rpc.cpp b/ggml/src/ggml-rpc/ggml-rpc.cpp
+--- a/ggml/src/ggml-rpc/ggml-rpc.cpp
++++ b/ggml/src/ggml-rpc/ggml-rpc.cpp
+@@ -716,3 +716,11 @@
+ static bool rpc_use_hash_cache(const ggml_tensor * tensor, size_t size) {
++    if (std::getenv("GGML_RPC_NO_HASH_CACHE")) {
++        static const bool logged = []() {
++            GGML_LOG_INFO("Connect Dual Spark: RPC hash cache disabled by GGML_RPC_NO_HASH_CACHE\n");
++            return true;
++        }();
++        (void) logged;
++        return false;
++    }
+     return size > HASH_THRESHOLD && tensor->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS;
+ }

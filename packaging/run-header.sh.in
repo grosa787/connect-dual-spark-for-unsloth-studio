@@ -53,7 +53,8 @@ usage() {
 Connect Dual Spark for Unsloth Studio ${package_version}
 
 Использование:
-  ${0##*/}                 проверить архив и запустить установщик
+  ${0##*/} [команда]       проверить архив и запустить команду
+  Команды: install, check, start-rpc, status, studio, refresh, update-unsloth
   ${0##*/} --lang en|ru|auto  выбрать язык установщика
   ${0##*/} --verify       проверить встроенный архив без установки
   ${0##*/} --version      показать версию
@@ -63,7 +64,8 @@ EOF
 Connect Dual Spark for Unsloth Studio ${package_version}
 
 Usage:
-  ${0##*/}            verify, unpack, and start the installer
+  ${0##*/} [command]  verify, unpack, and start a command
+  Commands: install, check, start-rpc, status, studio, refresh, update-unsloth
   ${0##*/} --lang en|ru|auto  choose the installer language
   ${0##*/} --verify   verify the embedded payload without installing
   ${0##*/} --version  print the embedded version
@@ -123,6 +125,7 @@ extract_payload() {
 
 run_installer() {
     local payload_dir=$1
+    local selected_command=$2
     local result_file="$work_dir/installer.status"
     local terminal_status installer_status
 
@@ -141,9 +144,10 @@ run_installer() {
             payload_dir=$1
             result_file=$2
             chosen_language=$3
+            selected_command=$4
             cd -- "$payload_dir" || exit 1
             PYTHONPATH="$payload_dir${PYTHONPATH:+:$PYTHONPATH}" \
-                python3 -m dual_spark.cli --lang "$chosen_language" install
+                python3 -m dual_spark.cli --lang "$chosen_language" "$selected_command"
             installer_status=$?
             printf "%s\n" "$installer_status" > "$result_file"
             if [[ "$chosen_language" == ru ]]; then
@@ -155,7 +159,7 @@ run_installer() {
             fi
             read -r _
             exit "$installer_status"
-        ' connect-dual-spark "$payload_dir" "$result_file" "$language"
+        ' connect-dual-spark "$payload_dir" "$result_file" "$language" "$selected_command"
     terminal_status=$?
     set -e
 
@@ -169,6 +173,8 @@ run_installer() {
 
 main() {
     local action=install
+    local selected_command=install
+    local command_set=false
     local previous=''
     local argument
     for argument in "$@"; do
@@ -195,8 +201,14 @@ main() {
                 shift
                 ;;
             --verify|--version|-h|--help)
-                [[ "$action" == install ]] || { usage >&2; return 2; }
+                [[ "$action" == install && "$command_set" == false ]] || { usage >&2; return 2; }
                 action=$1
+                shift
+                ;;
+            install|check|start-rpc|status|studio|refresh|update-unsloth)
+                [[ "$action" == install && "$command_set" == false ]] || { usage >&2; return 2; }
+                selected_command=$1
+                command_set=true
                 shift
                 ;;
             *)
@@ -235,7 +247,7 @@ main() {
     esac
 
     extract_payload
-    run_installer "$work_dir/payload"
+    run_installer "$work_dir/payload" "$selected_command"
 }
 
 main "$@"

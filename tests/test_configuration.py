@@ -1,6 +1,9 @@
 import unittest
 
-from dual_spark.configuration import bashrc_with_rpc, rpc_command, rpc_system_unit, studio_unit
+from dual_spark.configuration import (
+    bashrc_with_rpc, fastload_refresh_path, fastload_refresh_service,
+    rpc_command, rpc_system_unit, studio_unit,
+)
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -42,6 +45,29 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn(f"ExecStart={binary} --host 10.100.32.2 --port 50053 --cache", unit)
         self.assertNotIn("WantedBy=default.target", unit)
         self.assertNotIn("0.0.0.0", unit)
+
+    def test_studio_and_shell_keep_update_hook_and_managed_marker_path(self):
+        upstream = "/home/user/.unsloth/llama.cpp"
+        guard = upstream + "/llama-server"
+        proxy = "/home/user/.local/share/connect-dual-spark/update_proxy.py"
+        shell = bashrc_with_rpc("", "10.100.32.2", 50053, upstream, guard, proxy)
+        self.assertIn(f"export UNSLOTH_LLAMA_INSTALLER={proxy}", shell)
+        self.assertIn(f"export LLAMA_SERVER_PATH={guard}", shell)
+        self.assertEqual(shell, bashrc_with_rpc(shell, "10.100.32.2", 50053, upstream, guard, proxy))
+        unit = studio_unit("10.100.32.2", 50053, "/home/user/bin/unsloth", upstream, guard, proxy, host="0.0.0.0")
+        self.assertIn(f"Environment=UNSLOTH_LLAMA_INSTALLER={proxy}", unit)
+        self.assertIn(f"Environment=LLAMA_SERVER_PATH={guard}", unit)
+        self.assertIn("--host 0.0.0.0", unit)
+
+    def test_refresh_path_watches_replaced_uninstall_tree(self):
+        manager = "/home/user/.local/share/connect-dual-spark/fastload_manager.py"
+        config = "/home/user/.local/share/connect-dual-spark/llama-server-wrapper.json"
+        service = fastload_refresh_service(manager, config)
+        path = fastload_refresh_path("/home/user/.unsloth/llama.cpp")
+        self.assertIn(f"ExecStart=/usr/bin/python3 {manager} refresh --config {config}", service)
+        self.assertIn("PathChanged=/home/user/.unsloth", path)
+        self.assertIn("PathChanged=/home/user/.unsloth/llama.cpp/BUILD_INFO.txt", path)
+        self.assertIn("Unit=connect-dual-spark-refresh.service", path)
 
 
 if __name__ == "__main__":

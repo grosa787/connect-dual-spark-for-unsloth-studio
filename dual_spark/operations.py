@@ -12,7 +12,12 @@ import tempfile
 import time
 from urllib import request
 
-from .configuration import bashrc_with_rpc, rpc_command, rpc_system_unit, studio_unit
+from .configuration import (
+    bashrc_with_rpc, fastload_refresh_path, fastload_refresh_service,
+    rpc_command, rpc_system_unit, studio_unit,
+)
+from .fastload import read_upstream_identity
+from .fastload_manager import FastloadManager
 from .language import msg
 from .llama_wrapper import GUARD_REVISION, connectx_cable_present, validate_saved_pair
 from .probe import ClusterProbe
@@ -29,7 +34,7 @@ def smoke_command(binary, smoke_port=18765):
     return [
         binary, "--hf-repo", MODEL,
         "--ctx-size", "512", "--host", "127.0.0.1", "--port", str(smoke_port),
-        "--no-webui", "--parallel", "1",
+        "--no-webui", "--parallel", "1", "--verbosity", "4",
     ]
 
 
@@ -44,6 +49,8 @@ def smoke_log_proves_rdma(log_text, peer):
         and max(float(n) for n in remote_buffers) > 0
         and "RDMA activated:" in log_text
         and "RDMA activate failed" not in log_text
+        and "Connect Dual Spark: RPC hash cache disabled by GGML_RPC_NO_HASH_CACHE" in log_text
+        and "load_mode = dio" in log_text
     )
 
 
@@ -60,9 +67,13 @@ class Installer:
         self.peer = None
         self.home = Path.home()
         self.studio = self.home / ".unsloth/studio/unsloth_studio/bin/unsloth"
+        self.base = self.home / ".local/share/connect-dual-spark"
+        self.upstream = self.home / ".unsloth/llama.cpp"
+        self.guard_link = self.upstream / "llama-server"
         self.source = self.home / ".local/share/connect-dual-spark/llama-src"
-        self.server = self.source / "build/bin/llama-server"
+        self.server = self.base / "fastload/current/source/build/bin/llama-server"
         self.unit = self.home / ".config/systemd/user/connect-dual-spark-studio.service"
+        self.worker_exec_path = None
         self.bootstrap = False
 
     def bootstrap_prerequisites(self):
@@ -104,6 +115,7 @@ class Installer:
         lines = worker.splitlines()
         if len(lines) < 3 or lines[0] != "aarch64" or "GB10" not in lines[1] or lines[-1] != "ubuntu":
             raise RuntimeError(msg("Second machine must be an Ubuntu ARM64 DGX Spark with GB10", "Второй компьютер должен быть DGX Spark с Ubuntu ARM64 и GPU GB10"))
+        self.worker_exec_path = self._existing_rpc_exec_path()
 
     def install_studio(self):
         if not self.studio.is_file():
@@ -117,22 +129,18 @@ class Installer:
             print(msg("    Unsloth Studio is already installed", "    Unsloth Studio уже установлена"))
         if not self.studio.is_file():
             raise RuntimeError(msg("Official Unsloth install did not provide Studio", "Официальная установка Unsloth не создала Studio"))
-        host_check = "dpkg-query -W cmake ninja-build build-essential git libibverbs-dev librdmacm-dev libnuma-dev libcurl4-openssl-dev >/dev/null 2>&1"
+        host_check = "dpkg-query -W cmake build-essential libibverbs-dev librdmacm-dev >/dev/null 2>&1"
         try:
             self.runner.run(["bash", "-c", host_check])
         except CommandFailure:
             print(msg("    Installing host build packages (sudo may ask for its password)", "    Установка пакетов сборки на основном Spark (sudo может запросить пароль)"))
-            apt = "set -e; log=$(mktemp); trap 'rm -f \"$log\"' EXIT; if ! (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y cmake ninja-build build-essential git libibverbs-dev librdmacm-dev libnuma-dev libcurl4-openssl-dev) >\"$log\" 2>&1; then tail -n 30 \"$log\"; exit 1; fi"
+            apt = "set -e; log=$(mktemp); trap 'rm -f \"$log\"' EXIT; if ! (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y cmake build-essential libibverbs-dev librdmacm-dev) >\"$log\" 2>&1; then tail -n 30 \"$log\"; exit 1; fi"
             self.runner.run_interactive(["sudo", "bash", "-c", apt], label=msg("Install host build packages", "Установка пакетов сборки на основном Spark"))
-        if not (self.source / "CMakeLists.txt").is_file():
-            self.source.parent.mkdir(parents=True, exist_ok=True)
-            self.runner.run_task(["git", "clone", "--depth", "1", "https://github.com/unslothai/llama.cpp", str(self.source)], label=msg("Fetch matching llama.cpp source", "Загрузка исходников llama.cpp"), timeout=1200)
-        if not self.server.is_file():
-            configure = ["cmake", "-S", str(self.source), "-B", str(self.source / "build"), "-G", "Ninja", "-DGGML_CUDA=ON", "-DGGML_RPC=ON", "-DGGML_RPC_RDMA=ON", "-DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc"]
-            self.runner.run_task(configure, label=msg("Configure host CUDA/RPC/RDMA", "Настройка CUDA/RPC/RDMA на основном Spark"), timeout=1200)
-            self.runner.run_task(["cmake", "--build", str(self.source / "build"), "--target", "llama-server", "-j", "4"], label=msg("Build host llama-server", "Сборка llama-server на основном Spark"), timeout=3600)
-        if not self.server.is_file():
-            raise RuntimeError(msg("Host llama.cpp server build did not produce a binary", "Сборка llama.cpp на основном Spark не создала исполняемый файл сервера"))
+        try:
+            identity = read_upstream_identity(self.upstream)
+        except ValueError as exc:
+            raise RuntimeError(msg("Official Unsloth llama.cpp source or prebuilt is incomplete: ", "Официальные исходники или сборка llama.cpp неполны: ") + str(exc)) from exc
+        print(msg(f"    Official llama.cpp {identity.release_tag} is ready for fastload", f"    Официальная llama.cpp {identity.release_tag} готова к быстрой сборке"))
 
     def _worker(self, command, *, timeout=60):
         return self.runner.run(remote_ssh(self.peer, command), timeout=timeout)
@@ -147,24 +155,36 @@ class Installer:
             "host_ip": self.peer.host_ip,
             "host_iface": self.peer.host_iface,
             "rpc": f"{self.peer.worker_ip}:{RPC_PORT}",
+            "upstream_root": str(self.upstream),
+            "worker_user": self.peer.worker_user,
+            "worker_home": self.peer.worker_home,
+            "worker_exec_path": self._rpc_binary(),
+            "worker_service": RPC_SERVICE,
         }
 
     def _write_llama_wrapper(self):
         wrapper = self._llama_wrapper_path()
         wrapper.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        source = Path(__file__).with_name("llama_wrapper.py")
-        with tempfile.NamedTemporaryFile(dir=wrapper.parent, delete=False) as tmp:
-            temporary = Path(tmp.name)
-        try:
-            shutil.copyfile(source, temporary)
-            temporary.chmod(0o700)
-            os.replace(temporary, wrapper)
-        finally:
-            temporary.unlink(missing_ok=True)
+        runtime = Path(__file__).parent
+        for name in ("llama_wrapper.py", "fastload.py", "fastload_manager.py", "update_proxy.py"):
+            destination = wrapper.parent / ("llama-server-wrapper.py" if name == "llama_wrapper.py" else name)
+            with tempfile.NamedTemporaryFile(dir=wrapper.parent, delete=False) as tmp:
+                temporary = Path(tmp.name)
+            try:
+                shutil.copyfile(runtime / name, temporary)
+                temporary.chmod(0o700 if name != "fastload.py" else 0o600)
+                os.replace(temporary, destination)
+            finally:
+                temporary.unlink(missing_ok=True)
+        patches = wrapper.parent / "patches"
+        patches.mkdir(mode=0o700, exist_ok=True)
+        source_patch = runtime / "patches/rpc-no-hash-cache.patch"
+        shutil.copyfile(source_patch, patches / source_patch.name)
+        (patches / source_patch.name).chmod(0o600)
         return wrapper
 
     def _link_llama_wrapper(self, wrapper):
-        for root in (self.home / ".unsloth/llama.cpp", self.source):
+        for root in (self.upstream, self.source):
             if not root.is_dir():
                 continue
             if root.is_symlink():
@@ -185,10 +205,10 @@ class Installer:
             temporary_link.symlink_to(wrapper)
             os.replace(temporary_link, link)
 
-    def install_llama_guard(self, binary_override=None):
+    def install_llama_guard(self, binary_override=None, *, allow_pending=False):
         """Guard both Studio's managed and default GGUF binary search paths."""
         binary = Path(binary_override) if binary_override else self.server
-        if not binary.is_absolute() or not binary.is_file():
+        if not binary.is_absolute() or (not binary.is_file() and not (allow_pending and binary == self.server)):
             raise RuntimeError(msg("Built llama-server binary is missing", "Собранный исполняемый файл llama-server не найден"))
         wrapper = self._write_llama_wrapper()
         config = wrapper.with_suffix(".json")
@@ -216,13 +236,12 @@ class Installer:
             raise RuntimeError(msg("Saved two-Spark guard configuration is invalid", "Сохранённая настройка защиты пары Spark недопустима")) from exc
         if config.get("guard_revision", 1) > GUARD_REVISION:
             raise RuntimeError(msg("A newer two-Spark guard is installed; update this package before refreshing it", "Установлена более новая защита пары Spark; обновите этот пакет перед её восстановлением"))
-        if config["binary"] != str(self.server) or not self.server.is_file():
-            raise RuntimeError(msg("Saved two-Spark guard configuration is incomplete", "Сохранённая настройка защиты пары Spark неполная"))
+        if "upstream_root" in config and config["upstream_root"] != str(self.upstream):
+            raise RuntimeError(msg("Saved Unsloth root differs from this installation", "Сохранённый путь Unsloth не совпадает с установленным"))
         if not config["rpc"].endswith(f":{RPC_PORT}"):
             raise RuntimeError(msg("Saved RPC endpoint is invalid", "Сохранённый адрес RPC недопустим"))
-        for root in (self.home / ".unsloth/llama.cpp", self.source):
-            if not root.is_dir() or root.is_symlink():
-                raise RuntimeError(msg("Saved llama.cpp installation is missing or externally linked", "Сохранённая установка llama.cpp отсутствует или является сторонней ссылкой"))
+        if not self.upstream.is_dir() or self.upstream.is_symlink():
+            raise RuntimeError(msg("Saved llama.cpp installation is missing or externally linked", "Сохранённая установка llama.cpp отсутствует или является сторонней ссылкой"))
         config["guard_revision"] = GUARD_REVISION
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=config_path.parent, delete=False) as tmp:
             json.dump(config, tmp)
@@ -241,7 +260,7 @@ class Installer:
         try:
             config = json.loads(wrapper.with_suffix(".json").read_text(encoding="utf-8"))
             validate_saved_pair(config)
-            if not wrapper.is_file() or config.get("binary") != str(self.server):
+            if not wrapper.is_file() or (self.peer is not None and config.get("binary") != str(self.server)):
                 return False
             if config.get("guard_revision") != GUARD_REVISION:
                 return False
@@ -249,10 +268,22 @@ class Installer:
                 return False
             if self.peer is not None and config != self._llama_guard_config(self.server):
                 return False
+            for name in ("fastload.py", "fastload_manager.py", "update_proxy.py"):
+                installed = wrapper.parent / name
+                source = Path(__file__).with_name(name)
+                if not installed.is_file() or installed.read_bytes() != source.read_bytes():
+                    return False
+            installed_patch = wrapper.parent / "patches/rpc-no-hash-cache.patch"
+            source_patch = Path(__file__).parent / "patches/rpc-no-hash-cache.patch"
+            if not installed_patch.is_file() or installed_patch.read_bytes() != source_patch.read_bytes():
+                return False
+            roots = [self.upstream]
+            if self.source.is_dir() and self.source != self.upstream:
+                roots.append(self.source)
             return all(
                 (root / "llama-server").is_symlink()
                 and (root / "llama-server").resolve() == wrapper.resolve()
-                for root in (self.home / ".unsloth/llama.cpp", self.source)
+                for root in roots
             )
         except (OSError, ValueError, KeyError, RuntimeError):
             return False
@@ -272,39 +303,52 @@ class Installer:
         self.install_llama_guard()
 
     def sync_and_build_rpc(self):
+        if self._host_model_active():
+            raise RuntimeError(msg("Unload the active model before rebuilding fastload", "Выгрузите активную модель перед обновлением быстрой загрузки"))
         peer = self.peer
-        check = "command -v cmake && command -v ninja && command -v rsync && test -x /usr/local/cuda/bin/nvcc && dpkg-query -W cmake ninja-build build-essential git rsync libibverbs-dev librdmacm-dev libnuma-dev libcurl4-openssl-dev >/dev/null 2>&1"
+        check = "command -v cmake && command -v make && command -v rsync && test -x /usr/local/cuda/bin/nvcc && dpkg-query -W cmake build-essential libibverbs-dev librdmacm-dev >/dev/null 2>&1"
         try:
             self._worker(check)
         except CommandFailure:
             print(msg("    Installing build packages on the second Spark (sudo may ask for its password)", "    Установка пакетов сборки на втором Spark (sudo может запросить пароль)"))
-            apt = "set -e; log=$(mktemp); trap 'rm -f \"$log\"' EXIT; if ! (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y cmake ninja-build build-essential git rsync libibverbs-dev librdmacm-dev libnuma-dev libcurl4-openssl-dev) >\"$log\" 2>&1; then tail -n 30 \"$log\"; exit 1; fi"
+            apt = "set -e; log=$(mktemp); trap 'rm -f \"$log\"' EXIT; if ! (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y cmake build-essential rsync libibverbs-dev librdmacm-dev) >\"$log\" 2>&1; then tail -n 30 \"$log\"; exit 1; fi"
             self.runner.run_interactive(remote_ssh(peer, "sudo bash -c " + shlex.quote(apt), tty=True), label=msg("Install worker build packages", "Установка пакетов сборки на втором Spark"))
-        base = f"{peer.worker_home}/.local/share/connect-dual-spark"
-        dest = f"{base}/llama-src"
-        self._worker(remote_cmd("mkdir", "-p", dest))
-        ssh_transport = shlex.join(["ssh", "-b", peer.host_ip, "-o", f"BindInterface={peer.host_iface}", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=accept-new"])
-        self.runner.run_task([
-            "rsync", "-ac", "--delete", "--exclude=build/", "--exclude=.git/", "-e", ssh_transport,
-            f"{self.source}/", f"{peer.worker_user}@{peer.worker_ip}:{dest}/",
-        ], label=msg("Sync exact llama.cpp source over ConnectX-7", "Синхронизация исходников llama.cpp через ConnectX-7"), timeout=1200)
-        delta = self.runner.run([
-            "rsync", "-nrc", "--delete", "--itemize-changes", "--exclude=build/", "--exclude=.git/", "-e", ssh_transport,
-            f"{self.source}/", f"{peer.worker_user}@{peer.worker_ip}:{dest}/",
-        ], timeout=1200)
-        if delta.strip():
-            raise RuntimeError(msg("llama.cpp source differs after synchronization: ", "Исходники llama.cpp различаются после синхронизации: ") + delta[:300])
-        source_hash = self.runner.run(["sha256sum", str(self.source / "CMakeLists.txt")]).split()[0]
-        remote_hash = self._worker(remote_cmd("sha256sum", f"{dest}/CMakeLists.txt")).split()[0]
-        if source_hash != remote_hash:
-            raise RuntimeError(msg("Source checksum differs between Sparks", "Контрольные суммы исходников на двух Spark различаются"))
-        configure = remote_cmd("cmake", "-S", dest, "-B", f"{dest}/build", "-G", "Ninja", "-DGGML_CUDA=ON", "-DGGML_RPC=ON", "-DGGML_RPC_RDMA=ON", "-DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc")
-        self.runner.run_task(remote_ssh(peer, configure), label=msg("Configure worker CUDA/RPC/RDMA", "Настройка CUDA/RPC/RDMA на втором Spark"), timeout=1200)
-        self.runner.run_task(remote_ssh(peer, remote_cmd("cmake", "--build", f"{dest}/build", "--target", "ggml-rpc-server", "-j", "4")), label=msg("Build worker RPC server", "Сборка RPC-сервера на втором Spark"), timeout=3600)
-        self._worker(remote_cmd("test", "-x", f"{dest}/build/bin/ggml-rpc-server"))
+        # Publish the guarded v3 configuration before the worker can change.
+        # Concurrent Studio launches then wait in the manager or fail closed.
+        self.install_llama_guard(allow_pending=True)
+        result = FastloadManager(self._llama_wrapper_path().parent).refresh(self._llama_guard_config(self.server))
+        if result.state not in ("current", "promoted") or not self.server.is_file():
+            raise RuntimeError(msg("Fastload build could not be activated", "Быстрая загрузка не смогла активироваться"))
+        print(msg(f"    Fastload pair {result.build_id[:12]}: {result.state}", f"    Быстрая загрузка пары {result.build_id[:12]}: {result.state}"))
 
     def _rpc_binary(self):
-        return f"{self.peer.worker_home}/.local/share/connect-dual-spark/llama-src/build/bin/ggml-rpc-server"
+        return self.worker_exec_path or f"{self.peer.worker_home}/.local/share/connect-dual-spark/worker-rpc-launcher"
+
+    def _existing_rpc_exec_path_from_text(self, unit, expected_home):
+        """Accept only an existing service that runs as the discovered worker."""
+        fields = dict(line.split("=", 1) for line in unit.splitlines() if "=" in line)
+        if fields.get("User") != self.peer.worker_user or fields.get("Restart") != "always":
+            return None
+        try:
+            argv = shlex.split(fields["ExecStart"])
+        except (KeyError, ValueError):
+            return None
+        if len(argv) != 6 or argv[1:] != ["--host", self.peer.worker_ip, "--port", str(RPC_PORT), "--cache"]:
+            return None
+        path = Path(argv[0])
+        if not path.is_absolute() or not path.is_relative_to(expected_home):
+            return None
+        return str(path)
+
+    def _existing_rpc_exec_path(self):
+        try:
+            unit = self._worker(remote_cmd("cat", f"/etc/systemd/system/{RPC_SERVICE}"))
+            path = self._existing_rpc_exec_path_from_text(unit, Path(self.peer.worker_home))
+            if path is not None:
+                self._worker(remote_cmd("test", "-w", path))
+            return path
+        except (CommandFailure, OSError):
+            return None
 
     def _rpc_unit_text(self):
         peer = self.peer
@@ -337,11 +381,14 @@ class Installer:
         if pid is None:
             return False
         try:
-            if self._worker(remote_cmd("readlink", f"/proc/{pid}/exe")).strip() != self._rpc_binary():
+            selected = f"{self.peer.worker_home}/.local/share/connect-dual-spark/fastload/current-worker/source/build/bin/ggml-rpc-server"
+            running = self._worker(remote_cmd("readlink", "-f", f"/proc/{pid}/exe")).strip()
+            expected = self._worker(remote_cmd("readlink", "-f", selected)).strip()
+            if not expected or running != expected:
                 return False
             script = f"import json; from pathlib import Path; p=Path('/proc/{pid}/cmdline').read_bytes(); print(json.dumps([x.decode() for x in p.split(bytes([0])) if x]))"
             argv = json.loads(self._worker(remote_cmd("python3", "-c", script)))
-            return argv == rpc_command(self._rpc_binary(), self.peer.worker_ip, RPC_PORT)
+            return bool(argv) and argv[0] in (selected, running) and argv[1:] == rpc_command(selected, self.peer.worker_ip, RPC_PORT)[1:]
         except (CommandFailure, OSError, ValueError):
             return False
 
@@ -360,11 +407,12 @@ class Installer:
                 "-p", "Restart", "-p", "User",
             ))
             properties = dict(line.split("=", 1) for line in raw.splitlines() if "=" in line)
-            return properties == {
-                "NeedDaemonReload": "no", "DropInPaths": "",
+            expected = {
+                "DropInPaths": "",
                 "FragmentPath": f"/etc/systemd/system/{RPC_SERVICE}",
                 "Restart": "always", "User": self.peer.worker_user,
             }
+            return all(properties.get(name) == value for name, value in expected.items())
         except (CommandFailure, OSError, ValueError):
             return False
 
@@ -474,20 +522,26 @@ class Installer:
 
     def configure_studio(self):
         endpoint = f"{self.peer.worker_ip}:{RPC_PORT}"
-        wrapper = str(self._llama_wrapper_path())
+        wrapper = str(self.guard_link)
+        proxy = str(self._llama_wrapper_path().with_name("update_proxy.py"))
         bashrc = self.home / ".bashrc"
         previous = bashrc.read_text(encoding="utf-8") if bashrc.exists() else ""
-        bashrc.write_text(bashrc_with_rpc(previous, self.peer.worker_ip, RPC_PORT, str(self.source), wrapper), encoding="utf-8")
+        bashrc.write_text(bashrc_with_rpc(previous, self.peer.worker_ip, RPC_PORT, str(self.upstream), wrapper, proxy), encoding="utf-8")
         environment_dir = self.home / ".config/environment.d"
         environment_dir.mkdir(parents=True, exist_ok=True)
         environment_file = environment_dir / "90-connect-dual-spark.conf"
-        environment_file.write_text(f"LLAMA_ARG_RPC={endpoint}\nUNSLOTH_LLAMA_CPP_PATH={self.source}\nLLAMA_SERVER_PATH={wrapper}\n", encoding="utf-8")
+        environment_file.write_text(f"LLAMA_ARG_RPC={endpoint}\nUNSLOTH_LLAMA_CPP_PATH={self.upstream}\nLLAMA_SERVER_PATH={wrapper}\nUNSLOTH_LLAMA_INSTALLER={proxy}\n", encoding="utf-8")
         environment_file.chmod(0o600)
-        self.runner.run(["systemctl", "--user", "set-environment", f"LLAMA_ARG_RPC={endpoint}", f"UNSLOTH_LLAMA_CPP_PATH={self.source}", f"LLAMA_SERVER_PATH={wrapper}"])
+        self.runner.run(["systemctl", "--user", "set-environment", f"LLAMA_ARG_RPC={endpoint}", f"UNSLOTH_LLAMA_CPP_PATH={self.upstream}", f"LLAMA_SERVER_PATH={wrapper}", f"UNSLOTH_LLAMA_INSTALLER={proxy}"])
         self.unit.parent.mkdir(parents=True, exist_ok=True)
-        self.unit.write_text(studio_unit(self.peer.worker_ip, RPC_PORT, str(self.studio), str(self.source), wrapper), encoding="utf-8")
+        self.unit.write_text(studio_unit(self.peer.worker_ip, RPC_PORT, str(self.studio), str(self.upstream), wrapper, proxy, host="0.0.0.0"), encoding="utf-8")
+        refresh_service = self.unit.parent / "connect-dual-spark-refresh.service"
+        refresh_path = self.unit.parent / "connect-dual-spark-refresh.path"
+        refresh_service.write_text(fastload_refresh_service(str(self._llama_wrapper_path().with_name("fastload_manager.py")), str(self._llama_wrapper_path().with_suffix(".json"))), encoding="utf-8")
+        refresh_path.write_text(fastload_refresh_path(str(self.upstream)), encoding="utf-8")
         self.runner.run(["systemctl", "--user", "daemon-reload"])
         self.runner.run(["systemctl", "--user", "enable", self.unit.name])
+        self.runner.run(["systemctl", "--user", "enable", "--now", refresh_path.name])
         try:
             active = self.runner.run(["systemctl", "--user", "is-active", self.unit.name]).strip() == "active"
         except CommandFailure:
@@ -510,26 +564,77 @@ class Installer:
         unit = self.unit.read_text(encoding="utf-8")
         if f"LLAMA_ARG_RPC={peer.worker_ip}:{RPC_PORT}" not in unit:
             raise RuntimeError(msg("Studio RPC configuration differs from discovered peer", "Адрес RPC в настройках Studio не совпадает с обнаруженным вторым Spark"))
-        if f"LLAMA_SERVER_PATH={self._llama_wrapper_path()}" not in unit:
+        if f"LLAMA_SERVER_PATH={self.guard_link}" not in unit:
             raise RuntimeError(msg("Studio is not pinned to the dual-Spark llama-server guard", "Studio не закреплена за обёрткой llama-server для двух Spark"))
+        proxy = self._llama_wrapper_path().with_name("update_proxy.py")
+        if f"UNSLOTH_LLAMA_INSTALLER={proxy}" not in unit:
+            raise RuntimeError(msg("Studio's managed llama.cpp updater is not connected", "Обновление llama.cpp в Studio не подключено"))
         environment = (self.home / ".config/environment.d/90-connect-dual-spark.conf").read_text(encoding="utf-8")
-        if f"LLAMA_ARG_RPC={peer.worker_ip}:{RPC_PORT}" not in environment or f"UNSLOTH_LLAMA_CPP_PATH={self.source}" not in environment or f"LLAMA_SERVER_PATH={self._llama_wrapper_path()}" not in environment:
+        if f"LLAMA_ARG_RPC={peer.worker_ip}:{RPC_PORT}" not in environment or f"UNSLOTH_LLAMA_CPP_PATH={self.upstream}" not in environment or f"LLAMA_SERVER_PATH={self.guard_link}" not in environment or f"UNSLOTH_LLAMA_INSTALLER={proxy}" not in environment:
             raise RuntimeError(msg("Desktop login RPC configuration differs from discovered peer", "Адрес RPC в настройках рабочего стола не совпадает с обнаруженным вторым Spark"))
+        refresh_path = self.unit.parent / "connect-dual-spark-refresh.path"
+        if not refresh_path.is_file() or not (self.unit.parent / "connect-dual-spark-refresh.service").is_file():
+            raise RuntimeError(msg("Unsloth update repair service is missing", "Отсутствует служба восстановления после обновления Unsloth"))
+        try:
+            watching = self.runner.run(["systemctl", "--user", "is-active", refresh_path.name]).strip() == "active"
+            enabled = self.runner.run(["systemctl", "--user", "is-enabled", refresh_path.name]).strip() == "enabled"
+        except CommandFailure:
+            watching = enabled = False
+        if not watching or not enabled:
+            raise RuntimeError(msg("Unsloth update repair watcher is not active at login", "Служба восстановления после обновления Unsloth не активна при входе"))
+        fastload = FastloadManager(self._llama_wrapper_path().parent).status(self._llama_guard_config(self.server))
+        if fastload.get("state") != "current":
+            raise RuntimeError(msg("Fastload does not match the installed Unsloth version", "Быстрая загрузка не соответствует установленной версии Unsloth"))
 
     def verify_standalone(self):
         self.preflight()
         if connectx_cable_present():
             raise RuntimeError(msg("ConnectX-7 cable is present; verify the paired Spark instead", "Кабель ConnectX-7 подключён; проверьте работу пары Spark"))
-        if not self.studio.is_file() or not self.server.is_file():
+        if not self.studio.is_file() or not (self.upstream / "build/bin/llama-server").is_file():
             raise RuntimeError(msg("Standalone mode requires a completed two-Spark setup; connect both Sparks and run the installer first", "Для автономного режима нужна завершённая настройка пары; подключите оба Spark и сначала запустите установщик"))
         if not self._llama_guard_ready():
             self._refresh_stored_llama_guard()
         if not self._llama_guard_ready():
             raise RuntimeError(msg("Standalone guard could not be restored from the saved pair", "Не удалось восстановить автономную защиту из сохранённой настройки пары"))
         unit = self.unit.read_text(encoding="utf-8") if self.unit.is_file() else ""
-        if f"LLAMA_SERVER_PATH={self._llama_wrapper_path()}" not in unit:
+        if f"LLAMA_SERVER_PATH={self.guard_link}" not in unit and f"LLAMA_SERVER_PATH={self._llama_wrapper_path()}" not in unit:
             raise RuntimeError(msg("Studio is not pinned to the guarded llama-server", "Studio не закреплена за защищённым llama-server"))
         self._stored_rpc_endpoint()
+
+    def refresh(self):
+        """Reconcile the installed Unsloth version without reinstalling Studio."""
+        self.detect_cluster()
+        self.install_studio()
+        self.sync_and_build_rpc()
+        self.prepare_llama_guard()
+        self.configure_studio()
+        self.verify_installation()
+
+    def update_unsloth(self):
+        """Run Unsloth's updater with the managed Studio stopped, then reconcile."""
+        if self._host_model_active():
+            raise RuntimeError(msg("Unload the active model before updating Unsloth", "Выгрузите активную модель перед обновлением Unsloth"))
+        self.detect_cluster()
+        try:
+            active = self.runner.run(["systemctl", "--user", "is-active", self.unit.name]).strip() == "active"
+        except CommandFailure:
+            active = False
+        if not active and _tcp_open("127.0.0.1", "127.0.0.1", STUDIO_PORT):
+            raise RuntimeError(msg("Another Studio owns port 8888; close it before updating", "Порт 8888 занят другой Studio; закройте её перед обновлением"))
+        if active:
+            self.runner.run(["systemctl", "--user", "stop", self.unit.name])
+        try:
+            self.runner.run_task(
+                [str(self.studio), "studio", "update"],
+                label=msg("Update Unsloth Studio", "Обновление Unsloth Studio"), timeout=3600,
+            )
+            self.refresh()
+        except Exception:
+            if active:
+                self.runner.run(["systemctl", "--user", "start", self.unit.name])
+            raise
+        if active:
+            self.runner.run(["systemctl", "--user", "start", self.unit.name])
 
     def perform(self, stage):
         getattr(self, stage)()
@@ -554,8 +659,9 @@ class Installer:
             endpoint = f"{self.peer.worker_ip}:{RPC_PORT}" if self.peer is not None else self._stored_rpc_endpoint()
             required = {
                 f"LLAMA_ARG_RPC={endpoint}".encode(),
-                f"UNSLOTH_LLAMA_CPP_PATH={self.source}".encode(),
-                f"LLAMA_SERVER_PATH={self._llama_wrapper_path()}".encode(),
+                f"UNSLOTH_LLAMA_CPP_PATH={self.upstream}".encode(),
+                f"LLAMA_SERVER_PATH={self.guard_link}".encode(),
+                f"UNSLOTH_LLAMA_INSTALLER={self._llama_wrapper_path().with_name('update_proxy.py')}".encode(),
             }
             if not required.issubset(set(process_environment)):
                 raise RuntimeError(msg("Existing Studio service has outdated RPC settings; stop it before launching the configured service", "У существующей службы Studio устаревшие настройки RPC; остановите её перед запуском настроенной службы"))

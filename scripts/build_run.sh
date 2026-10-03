@@ -37,11 +37,22 @@ for command_name in awk cat chmod cp find grep head install mktemp python3 sed t
         fail "required command not found: $command_name"
 done
 
+runtime_paths=(
+    "dual_spark/fastload.py"
+    "dual_spark/fastload_manager.py"
+    "dual_spark/update_proxy.py"
+    "dual_spark/patches/rpc-no-hash-cache.patch"
+)
+
 for source_path in \
     "$project_root/dual_spark/__init__.py" \
     "$project_root/dual_spark/cli.py" \
     "$project_root/dual_spark/language.py" \
     "$project_root/dual_spark/llama_wrapper.py" \
+    "$project_root/dual_spark/fastload.py" \
+    "$project_root/dual_spark/fastload_manager.py" \
+    "$project_root/dual_spark/update_proxy.py" \
+    "$project_root/dual_spark/patches/rpc-no-hash-cache.patch" \
     "$project_root/packaging/run-header.sh.in"; do
     [[ -f "$source_path" ]] || fail "required source file not found: $source_path"
 done
@@ -78,7 +89,11 @@ find "$payload_root/dual_spark" -type f -exec chmod 0644 {} +
 PYTHONPATH="$payload_root" python3 -c 'import dual_spark.cli'
 
 COPYFILE_DISABLE=1 tar -C "$payload_root" -czf "$archive_path" dual_spark
-tar -tzf "$archive_path" >/dev/null
+archive_contents="$(tar -tzf "$archive_path")"
+for runtime_path in "${runtime_paths[@]}"; do
+    grep -Fqx -- "$runtime_path" <<<"$archive_contents" || \
+        fail "required runtime file is missing from payload: $runtime_path"
+done
 payload_sha256="$(sha256_file "$archive_path")"
 
 sed \
@@ -103,3 +118,4 @@ install -m 0755 "$built_run" "$output_path"
 
 printf 'Built %s\n' "$output_path"
 printf 'SHA-256: %s\n' "$(sha256_file "$output_path")"
+printf 'Verified %d fastload runtime files in payload\n' "${#runtime_paths[@]}"

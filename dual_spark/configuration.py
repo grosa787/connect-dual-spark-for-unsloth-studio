@@ -60,7 +60,7 @@ WantedBy=multi-user.target
 """
 
 
-def bashrc_with_rpc(contents: str, address: str, port: int, source_dir: str | None = None, server_binary: str | None = None) -> str:
+def bashrc_with_rpc(contents: str, address: str, port: int, source_dir: str | None = None, server_binary: str | None = None, installer_proxy: str | None = None) -> str:
     private_ipv4(address)
     if not 1 <= port <= 65535:
         raise ValueError(msg("Invalid RPC port", "Недопустимый порт RPC"))
@@ -68,11 +68,14 @@ def bashrc_with_rpc(contents: str, address: str, port: int, source_dir: str | No
         raise ValueError(msg("llama.cpp source directory must be absolute", "Путь к исходникам llama.cpp должен быть абсолютным"))
     if server_binary is not None and not Path(server_binary).is_absolute():
         raise ValueError(msg("llama-server wrapper path must be absolute", "Путь к обёртке llama-server должен быть абсолютным"))
+    if installer_proxy is not None and not Path(installer_proxy).is_absolute():
+        raise ValueError(msg("llama.cpp update proxy path must be absolute", "Путь к прокси обновления llama.cpp должен быть абсолютным"))
     begin = "# BEGIN Connect Dual Spark RPC"
     end = "# END Connect Dual Spark RPC"
     source_line = f"export UNSLOTH_LLAMA_CPP_PATH={shlex.quote(source_dir)}\n" if source_dir else ""
     server_line = f"export LLAMA_SERVER_PATH={shlex.quote(server_binary)}\n" if server_binary else ""
-    block = f"{begin}\nexport LLAMA_ARG_RPC={address}:{port}\n{source_line}{server_line}{end}\n"
+    proxy_line = f"export UNSLOTH_LLAMA_INSTALLER={shlex.quote(installer_proxy)}\n" if installer_proxy else ""
+    block = f"{begin}\nexport LLAMA_ARG_RPC={address}:{port}\n{source_line}{server_line}{proxy_line}{end}\n"
     pattern = re.compile(re.escape(begin) + r"\n.*?\n" + re.escape(end) + r"\n?", re.DOTALL)
     if begin in contents:
         if not pattern.search(contents):
@@ -81,7 +84,7 @@ def bashrc_with_rpc(contents: str, address: str, port: int, source_dir: str | No
     return contents.rstrip("\n") + "\n\n" + block
 
 
-def studio_unit(address: str, port: int, studio_binary: str, source_dir: str | None = None, server_binary: str | None = None) -> str:
+def studio_unit(address: str, port: int, studio_binary: str, source_dir: str | None = None, server_binary: str | None = None, installer_proxy: str | None = None, *, host: str = "127.0.0.1") -> str:
     private_ipv4(address)
     if not 1 <= port <= 65535 or not Path(studio_binary).is_absolute():
         raise ValueError(msg("Invalid Studio service arguments", "Недопустимые параметры службы Studio"))
@@ -89,8 +92,13 @@ def studio_unit(address: str, port: int, studio_binary: str, source_dir: str | N
         raise ValueError(msg("llama.cpp source directory must be absolute", "Путь к исходникам llama.cpp должен быть абсолютным"))
     if server_binary is not None and not Path(server_binary).is_absolute():
         raise ValueError(msg("llama-server wrapper path must be absolute", "Путь к обёртке llama-server должен быть абсолютным"))
+    if installer_proxy is not None and not Path(installer_proxy).is_absolute():
+        raise ValueError(msg("llama.cpp update proxy path must be absolute", "Путь к прокси обновления llama.cpp должен быть абсолютным"))
+    if host not in ("127.0.0.1", "0.0.0.0"):
+        raise ValueError(msg("Invalid Studio listen address", "Недопустимый адрес Studio"))
     source_environment = f"Environment=UNSLOTH_LLAMA_CPP_PATH={source_dir}\n" if source_dir else ""
     server_environment = f"Environment=LLAMA_SERVER_PATH={server_binary}\n" if server_binary else ""
+    proxy_environment = f"Environment=UNSLOTH_LLAMA_INSTALLER={installer_proxy}\n" if installer_proxy else ""
     return f"""[Unit]
 Description=Unsloth Studio with ConnectX-7 RPC
 After=network-online.target
@@ -99,9 +107,41 @@ After=network-online.target
 Type=simple
 UMask=0077
 Environment=LLAMA_ARG_RPC={address}:{port}
-{source_environment}{server_environment}ExecStart={studio_binary} studio --host 127.0.0.1 --port 8888 --silent
-Restart=on-failure
+{source_environment}{server_environment}{proxy_environment}ExecStart={studio_binary} studio --host {host} --port 8888 --silent
+Restart=always
 RestartSec=10
+
+[Install]
+WantedBy=default.target
+"""
+
+
+def fastload_refresh_service(manager_path: str, config_path: str) -> str:
+    """User service that reconciles a replaced Unsloth llama.cpp tree."""
+    if any(not Path(path).is_absolute() or any(ch.isspace() for ch in path) for path in (manager_path, config_path)):
+        raise ValueError("Fastload manager paths must be absolute and contain no whitespace")
+    return f"""[Unit]
+Description=Refresh Connect Dual Spark after an Unsloth update
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 {manager_path} refresh --config {config_path}
+TimeoutStartSec=3600
+"""
+
+
+def fastload_refresh_path(upstream_root: str) -> str:
+    """Observe both directory replacement and in-place metadata updates."""
+    root = Path(upstream_root)
+    if not root.is_absolute() or any(ch.isspace() for ch in upstream_root):
+        raise ValueError("Unsloth llama.cpp root must be absolute and contain no whitespace")
+    return f"""[Unit]
+Description=Watch Unsloth llama.cpp for Connect Dual Spark refresh
+
+[Path]
+PathChanged={root.parent}
+PathChanged={root / 'BUILD_INFO.txt'}
+Unit=connect-dual-spark-refresh.service
 
 [Install]
 WantedBy=default.target
