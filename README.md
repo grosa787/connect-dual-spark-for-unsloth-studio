@@ -182,3 +182,10 @@ Run `connect-dual-spark check` and fix the first reported error. Common causes a
 - [NVIDIA Sync Cluster Assistant](https://docs.nvidia.com/sync/latest/cluster-assistant.html)
 - [`llama.cpp` RPC](https://github.com/ggml-org/llama.cpp/blob/master/tools/rpc/README.md)
 - [Unsloth](https://github.com/unslothai/unsloth/blob/main/README.md)
+# Native Spark Link application
+
+A separate native app with a 3D cable editor, installation and update controls is available. It does not require the installed CLI. [Desktop installation and download options](desktop/README.md).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash
+```

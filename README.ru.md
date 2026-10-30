@@ -182,3 +182,10 @@ Studio слушает порт 8888 на всех интерфейсах хос�
 - [NVIDIA Sync Cluster Assistant](https://docs.nvidia.com/sync/latest/cluster-assistant.html)
 - [`llama.cpp` RPC](https://github.com/ggml-org/llama.cpp/blob/master/tools/rpc/README.md)
 - [Unsloth](https://github.com/unslothai/unsloth/blob/main/README.md)
+# Нативное приложение Spark Link
+
+Теперь доступно отдельное приложение с 3D-схемой кабелей, установкой и обновлениями. Оно не требует установленной CLI. [Полная инструкция и два варианта установки](desktop/README.ru.md).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash
+```
