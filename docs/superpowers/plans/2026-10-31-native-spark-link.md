@@ -22,7 +22,7 @@
 - [x] Build versioned tar archive and self-extracting run, bootstrap installer, desktop/menu entries, repair old launcher.
 - [x] Document download-and-install and offline-archive install commands plus existing CLI commands in English/Russian.
 - [x] Verify tests, archive installation from clean app directory, menu launch, real two-Spark inventory and no-op cabling apply.
-- [ ] Publish code and release artifacts on existing public GitHub repository and install native app on first Spark.
+- [x] Publish code and release artifacts on existing public GitHub repository and install native app on first Spark. Release: https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.0.0
 
 ## Review focus
 Invalid topology cannot mutate networking; failed SSH cannot be green; active models block write jobs; failed updates restore service availability; external user guard survives app install/update; archived paths and desktop launchers handle spaces; three-node states distinguish prepared from verified hardware.

@@ -2,6 +2,18 @@
 
 # Connect Dual Spark for Unsloth Studio
 
+## Native Spark Link application
+
+A separate native app with a 3D cable editor, installation and update controls is available. It does not require the installed CLI. [Desktop instructions](desktop/README.md) · [Download the app](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.0.0).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash
+```
+
+![Spark Link native app](docs/images/spark-link-overview.png)
+
+## Independent CLI installer
+
 Connect Dual Spark automatically discovers the direct ConnectX-7 link between exactly two NVIDIA DGX Spark systems, installs Unsloth Studio, and configures `llama.cpp` RPC on the second Spark. Inter-node model traffic is allowed only over the verified high-speed ConnectX-7 interface.
 
 > **Pre-release status:** Version 0.6.0 has measured fastload results on the reference DGX Spark pair and passes automated checks, but a complete clean installation of this release still needs validation on physical hardware. Test the prerelease on the target pair before production use.
@@ -182,10 +194,3 @@ Run `connect-dual-spark check` and fix the first reported error. Common causes a
 - [NVIDIA Sync Cluster Assistant](https://docs.nvidia.com/sync/latest/cluster-assistant.html)
 - [`llama.cpp` RPC](https://github.com/ggml-org/llama.cpp/blob/master/tools/rpc/README.md)
 - [Unsloth](https://github.com/unslothai/unsloth/blob/main/README.md)
-# Native Spark Link application
-
-A separate native app with a 3D cable editor, installation and update controls is available. It does not require the installed CLI. [Desktop installation and download options](desktop/README.md).
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash
-```
