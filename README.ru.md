@@ -4,7 +4,9 @@
 
 ## Нативное приложение Spark Link
 
-Отдельное приложение с 3D-схемой кабелей, установкой и обновлениями. Оно не требует установленной CLI. [Полная инструкция](desktop/README.ru.md) · [Скачать приложение](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.4.0).
+Отдельное приложение с 3D-схемой кабелей, установкой и обновлениями. Оно не требует установленной CLI. [Полная инструкция](desktop/README.ru.md) · [Скачать приложение](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.4.1).
+
+**Spark Link 1.4.1:** исправлен запуск Mistral 1M/F16 на проверенном кластере из трёх Spark: размещение attention рядом с общим KV и проверка измеренного расхода памяти. Сохранены контекст и веса; используется одна очередь. [Отчёт](docs/mistral-million-context-2026-10-31.ru.md).
 
 **Spark Link 1.4.0:** настоящий запуск Q8/1M с текстом и изображением на трёх GPU, поиск через LAN/LLDP, различение клонов ОС и восстановление RPC. [Отчёт о третьем Spark](docs/third-spark-2026-10-31.ru.md).
 

@@ -4,7 +4,9 @@
 
 ## Native Spark Link application
 
-A separate native app with a 3D cable editor, installation and update controls is available. It does not require the installed CLI. [Desktop instructions](desktop/README.md) · [Download the app](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.4.0).
+A separate native app with a 3D cable editor, installation and update controls is available. It does not require the installed CLI. [Desktop instructions](desktop/README.md) · [Download the app](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.4.1).
+
+**Spark Link 1.4.1:** repairs Mistral 1M/F16 startup on the validated three-Spark cluster using shared-KV attention placement and calibrated memory checks. One slot and bounded batching preserve the requested context and existing weights. [Repair report](docs/mistral-million-context-2026-10-31.md).
 
 **Spark Link 1.4.0:** real three-GPU Q8/1M-context text and vision validation, passive LAN/LLDP discovery, cloned-OS hardware identity fix and verified RPC recovery. [Third Spark report](docs/third-spark-2026-10-31.md).
 

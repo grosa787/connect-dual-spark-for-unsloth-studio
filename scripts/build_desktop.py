@@ -7,7 +7,7 @@ import tarfile
 import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = '1.4.0'
+VERSION = '1.4.1'
 
 def main():
     parser=argparse.ArgumentParser()

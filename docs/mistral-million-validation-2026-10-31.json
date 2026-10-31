@@ -1,0 +1,120 @@
+{
+  "load_result": {
+    "status": "loaded",
+    "message": null,
+    "max_seq_length": null,
+    "parallel_slots": 4,
+    "backend": null,
+    "context_length": 1048576
+  },
+  "placement": {
+    "pid": 1602025,
+    "split": "27,34,39",
+    "devices": "CUDA0,RPC0,RPC1",
+    "context": "1048576",
+    "load_seconds": 168.3
+  },
+  "allocated_mib": {
+    "weights": {
+      "CUDA0": 66233.2,
+      "RPC0": 76717.34999999999,
+      "RPC1": 80394.66
+    },
+    "kv": {
+      "CUDA0": 27653.06,
+      "RPC0": 29826.53,
+      "RPC1": 26368.0
+    }
+  },
+  "chat_result": {
+    "content": "4",
+    "usage": {
+      "prompt_tokens": 28,
+      "completion_tokens": 93,
+      "total_tokens": 121,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "audio_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "audio_tokens": 0,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0
+      }
+    }
+  },
+  "vision_result": {
+    "content": "Red",
+    "usage": {
+      "prompt_tokens": 58,
+      "completion_tokens": 47,
+      "total_tokens": 105,
+      "prompt_tokens_details": {
+        "cached_tokens": 14,
+        "audio_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "audio_tokens": 0,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0
+      }
+    }
+  },
+  "date": "2026-10-31",
+  "model": "unsloth/Mistral-Large-4-1T-A52B-GGUF",
+  "variant": "UD-IQ1_S",
+  "kv": "f16",
+  "reasoning": "high",
+  "batch": 128,
+  "microbatch": 16,
+  "parallel": 1,
+  "shared_kv_source": 35,
+  "attention_colocated_layers": [
+    47,
+    51,
+    55,
+    59,
+    63,
+    67,
+    71
+  ],
+  "functional_probe": {
+    "long_text": {
+      "content": "4",
+      "usage": {
+        "completion_tokens": 44,
+        "prompt_tokens": 1836,
+        "total_tokens": 1880,
+        "prompt_tokens_details": {
+          "cached_tokens": 1
+        }
+      },
+      "elapsed_seconds": 69.92390869202791
+    },
+    "vision": {
+      "content": "Red",
+      "usage": {
+        "completion_tokens": 52,
+        "prompt_tokens": 55,
+        "total_tokens": 107,
+        "prompt_tokens_details": {
+          "cached_tokens": 14
+        }
+      },
+      "elapsed_seconds": 7.46217307203915
+    }
+  },
+  "calibration_min_available_gib": [
+    11.551036834716797,
+    9.858844757080078,
+    8.003448486328125
+  ],
+  "input_window_fully_filled": false,
+  "left_loaded": true,
+  "test_counts": {
+    "cli": 138,
+    "desktop": 65
+  }
+}

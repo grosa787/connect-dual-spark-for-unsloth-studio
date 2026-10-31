@@ -6,6 +6,8 @@ An independently installable Qt Quick / Qt Quick 3D app for Ubuntu 24.04+ ARM64 
 
 [Verified backend update: Unsloth 2026.10.11, llama.cpp b11985, Q8 text and vision on two Sparks](../docs/runtime-update-2026-10-31.md).
 
+**Spark Link 1.4.1:** repairs Mistral 1M/F16 startup on the validated three-Spark cluster using shared-KV attention placement and calibrated memory checks. One slot and bounded batching preserve the requested context and existing weights. [Repair report](../docs/mistral-million-context-2026-10-31.md).
+
 Spark Link 1.4.0 adds reliable LAN/LLDP discovery and GPU-based identities. The real three-Spark Q8/1M-context text/vision and worker restart checks passed. [Enrollment and validation report](../docs/third-spark-2026-10-31.md).
 
 Spark Link 1.3.0 refines the triangle cabling editor, preserves the existing pair’s ports when adding a third device and adds connector detail. [Triangle release notes](../docs/triangle-and-detail-2026-10-31.md).
@@ -40,13 +42,13 @@ The installer downloads and checks the release archive, extracts it, creates an 
 For a manually downloaded self-extracting installer:
 
 ```bash
-bash "$HOME/Downloads/Spark-Link-1.4.0-arm64.run"
+bash "$HOME/Downloads/Spark-Link-1.4.1-arm64.run"
 ```
 
 For a manually downloaded tar.gz archive:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash -s -- --archive "$HOME/Downloads/Spark-Link-1.4.0-arm64.tar.gz"
+curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash -s -- --archive "$HOME/Downloads/Spark-Link-1.4.1-arm64.tar.gz"
 ```
 
 Alternatively extract the archive in a file manager, open a terminal inside **Spark-Link** and run `bash ./install.sh`. Both formats install the same native app. No manual chmod or `.deb` extraction is required. These commands target Ubuntu ARM64 Spark devices, not macOS/Windows or arbitrary Linux architectures. Qt wheels are included; an extracted release installs without downloading Python packages when the required system libraries are already present.

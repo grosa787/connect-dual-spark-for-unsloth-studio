@@ -2,6 +2,10 @@
 
 # Spark Link verification
 
+## Spark Link 1.4.1: Mistral 1M startup
+
+138 CLI / 65 desktop checks, calibrated profile guards and ordinary Studio Mistral UD-IQ1_S with context 1048576, F16 KV, high reasoning, DSpark, text and vision. [Evidence and limits](../docs/mistral-million-context-2026-10-31.md).
+
 ## Spark Link 1.4.0: real three-device qualification
 
 138 CLI and 58 desktop tests; real three-GPU Q8/F16 KV at configured 1048576 context; text and vision; all 12 directed jumbo-packet checks; third-worker restart and automatic return from two to three devices; six-tab/four-language native UI. [Evidence and limitations](../docs/third-spark-2026-10-31.md).

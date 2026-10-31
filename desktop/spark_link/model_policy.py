@@ -93,6 +93,12 @@ def available_nodes(command):
 def apply_saved(command,args):
     policy=matched_policy(read_json(POLICIES,{'models':[]}).get('models',[]),args)
     if not policy:
+        from .launch_profiles import apply_profile
+        # Calibrated layouts account for layer/KV sharing, which is not linear
+        # in the tensor-split percentages used by the generic estimator below.
+        if read_json(CONFIG/'launch-profiles.json',{}).get('profiles'):
+            profiled=apply_profile(command,available_nodes(command))
+            if profiled is not None: return profiled
         # Refuse an oversized local fallback after a worker/cable outage.
         model=argument(args,('-m','--model'))
         if model and not argument(command,('--rpc',)) and Path(model).is_file():
@@ -190,7 +196,7 @@ def install_gateway(kind=None):
     import dual_spark
     package=Path(__file__).parent
     core=Path(dual_spark.__file__).parent
-    names=('__init__.py','model_policy.py','memory_planner.py','gguf_metadata.py','runtime_stats.py','state.py','multi.py','topology.py')
+    names=('__init__.py','model_policy.py','launch_profiles.py','memory_planner.py','gguf_metadata.py','runtime_stats.py','state.py','multi.py','topology.py')
     digest=hashlib.sha256(b''.join((package/name).read_bytes() for name in names)+b''.join(p.read_bytes() for p in sorted(core.glob('*.py')))).hexdigest()[:16]
     root=BASE/'model-runtime'
     destination=root/'releases'/digest
