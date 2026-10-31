@@ -1,0 +1,19 @@
+--- a/ggml/src/ggml-rpc/ggml-rpc.cpp
++++ b/ggml/src/ggml-rpc/ggml-rpc.cpp
+@@ -15,3 +15,3 @@
+         /* .async                 = */ true,
+-        /* .host_buffer           = */ false,
++        /* .host_buffer           = */ true,
+         /* .buffer_from_host_ptr  = */ false,
+@@ -23,1 +23,6 @@
++static ggml_backend_buffer_type_t ggml_backend_rpc_device_get_host_buffer_type(ggml_backend_dev_t dev) {
++    GGML_UNUSED(dev);
++    return ggml_backend_cpu_buffer_type();
++}
++
+ static const struct ggml_backend_device_i ggml_backend_rpc_device_i = {
+@@ -24,3 +29,3 @@
+     /* .get_buffer_type      = */ ggml_backend_rpc_device_get_buffer_type,
+-    /* .get_host_buffer_type = */ NULL,
++    /* .get_host_buffer_type = */ ggml_backend_rpc_device_get_host_buffer_type,
+     /* .buffer_from_host_ptr = */ NULL,

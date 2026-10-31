@@ -1,0 +1,14 @@
+--- a/ggml/src/ggml-rpc/ggml-rpc.cpp
++++ b/ggml/src/ggml-rpc/ggml-rpc.cpp
+@@ -21,2 +21,11 @@
+ void rpc_dispatcher::graph_compute(uint32_t device, const ggml_cgraph * cgraph) {
++    // UID zero is the existing RPC protocol's uncached-graph path. Copy only
++    // the graph descriptor: tensor data and the caller's UID remain unchanged.
++    ggml_cgraph uncached_graph;
++    if (std::getenv("GGML_RPC_NO_GRAPH_CACHE")) {
++        uncached_graph = *cgraph;
++        uncached_graph.uid = 0;
++        cgraph = &uncached_graph;
++    }
++
+     std::lock_guard<std::mutex> lock(graph_mutex);

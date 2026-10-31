@@ -178,9 +178,10 @@ class Installer:
                 temporary.unlink(missing_ok=True)
         patches = wrapper.parent / "patches"
         patches.mkdir(mode=0o700, exist_ok=True)
-        source_patch = runtime / "patches/rpc-no-hash-cache.patch"
-        shutil.copyfile(source_patch, patches / source_patch.name)
-        (patches / source_patch.name).chmod(0o600)
+        for name in ("rpc-no-hash-cache.patch", "rpc-async-staging.patch", "rpc-graph-cache-profile.patch"):
+            source_patch = runtime / "patches" / name
+            shutil.copyfile(source_patch, patches / source_patch.name)
+            (patches / source_patch.name).chmod(0o600)
         return wrapper
 
     def _link_llama_wrapper(self, wrapper):
@@ -273,10 +274,11 @@ class Installer:
                 source = Path(__file__).with_name(name)
                 if not installed.is_file() or installed.read_bytes() != source.read_bytes():
                     return False
-            installed_patch = wrapper.parent / "patches/rpc-no-hash-cache.patch"
-            source_patch = Path(__file__).parent / "patches/rpc-no-hash-cache.patch"
-            if not installed_patch.is_file() or installed_patch.read_bytes() != source_patch.read_bytes():
-                return False
+            for name in ("rpc-no-hash-cache.patch", "rpc-async-staging.patch", "rpc-graph-cache-profile.patch"):
+                installed_patch = wrapper.parent / "patches" / name
+                source_patch = Path(__file__).parent / "patches" / name
+                if not installed_patch.is_file() or installed_patch.read_bytes() != source_patch.read_bytes():
+                    return False
             roots = [self.upstream]
             if self.source.is_dir() and self.source != self.upstream:
                 roots.append(self.source)

@@ -33,6 +33,27 @@ _PATCHED_RPC_CACHE_FUNCTION = """static bool rpc_use_hash_cache(const ggml_tenso
     return size > HASH_THRESHOLD && tensor->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS;
 }"""
 
+_RPC_DEVICE_INTERFACE = "static const struct ggml_backend_device_i ggml_backend_rpc_device_i = {"
+_RPC_HOST_BUFFER_DISABLED = "/* .host_buffer           = */ false,"
+_RPC_HOST_BUFFER_NULL = "/* .get_host_buffer_type = */ NULL,"
+_RPC_HOST_BUFFER_GETTER = """static ggml_backend_buffer_type_t ggml_backend_rpc_device_get_host_buffer_type(ggml_backend_dev_t dev) {
+    GGML_UNUSED(dev);
+    return ggml_backend_cpu_buffer_type();
+}
+
+"""
+_RPC_GRAPH_COMPUTE = "void rpc_dispatcher::graph_compute(uint32_t device, const ggml_cgraph * cgraph) {"
+_RPC_UNCACHED_GRAPH = """
+    // UID zero is the existing RPC protocol's uncached-graph path. Copy only
+    // the graph descriptor: tensor data and the caller's UID remain unchanged.
+    ggml_cgraph uncached_graph;
+    if (std::getenv("GGML_RPC_NO_GRAPH_CACHE")) {
+        uncached_graph = *cgraph;
+        uncached_graph.uid = 0;
+        cgraph = &uncached_graph;
+    }
+"""
+
 
 @dataclass(frozen=True)
 class UpstreamIdentity:
@@ -125,13 +146,31 @@ def read_upstream_identity(root: Path) -> UpstreamIdentity:
 
 
 def patch_rpc_source(text: str) -> str:
-    """Add the opt in hash-cache bypass to one known upstream function."""
+    """Bypass slow weight hashing and expose bounded asynchronous RPC staging.
+
+    The native model loader already supplies aligned chunks, a bounded buffer
+    ring and event barriers. Advertising a CPU host buffer lets it use that
+    path instead of staging and sending an entire tensor synchronously. Model
+    data, tensor formats and RPC message serialization remain untouched.
+    """
 
     if "GGML_RPC_NO_HASH_CACHE" in text or "Connect Dual Spark: RPC hash cache disabled" in text:
         raise ValueError("RPC source is already patched")
     if text.count(_RPC_CACHE_FUNCTION) != 1:
         raise ValueError("RPC source drift: expected exactly one supported rpc_use_hash_cache function")
-    return text.replace(_RPC_CACHE_FUNCTION, _PATCHED_RPC_CACHE_FUNCTION, 1)
+    patched = text.replace(_RPC_CACHE_FUNCTION, _PATCHED_RPC_CACHE_FUNCTION, 1)
+    if _RPC_DEVICE_INTERFACE in text:
+        expected = (_RPC_DEVICE_INTERFACE, _RPC_HOST_BUFFER_DISABLED, _RPC_HOST_BUFFER_NULL,
+                    "/* .async                 = */ true,", "/* .events                = */ true,")
+        if any(text.count(marker) != 1 for marker in expected):
+            raise ValueError("RPC async staging source drift: unsupported device/host-buffer contract")
+        patched = patched.replace(_RPC_HOST_BUFFER_DISABLED, "/* .host_buffer           = */ true,", 1)
+        patched = patched.replace(_RPC_HOST_BUFFER_NULL, "/* .get_host_buffer_type = */ ggml_backend_rpc_device_get_host_buffer_type,", 1)
+        patched = patched.replace(_RPC_DEVICE_INTERFACE, _RPC_HOST_BUFFER_GETTER + _RPC_DEVICE_INTERFACE, 1)
+        if text.count(_RPC_GRAPH_COMPUTE) != 1:
+            raise ValueError("RPC graph cache source drift: unsupported dispatcher contract")
+        patched = patched.replace(_RPC_GRAPH_COMPUTE, _RPC_GRAPH_COMPUTE + _RPC_UNCACHED_GRAPH, 1)
+    return patched
 
 
 def build_id(identity: UpstreamIdentity, patch_digest: str, cmake_flags: Sequence[str]) -> str:

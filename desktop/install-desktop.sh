@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-version=1.1.0
+version=1.1.1
 archive=""
 launch=()
 while (( $# )); do

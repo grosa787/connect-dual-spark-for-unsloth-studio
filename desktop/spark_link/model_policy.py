@@ -141,9 +141,38 @@ def apply_saved(command,args):
     print('Spark Link: memory policy applied; context='+str(policy['context'])+'; devices='+argument(result,('--device',)),file=sys.stderr,flush=True)
     return result
 
+def sync_manager_helpers(core=None):
+    """Update the independent management engine without replacing user launchers."""
+    import tempfile
+    if core is None:
+        import dual_spark
+        core=Path(dual_spark.__file__).parent
+    core=Path(core)
+    def atomic(path,data,mode):
+        path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+        with tempfile.NamedTemporaryFile(dir=path.parent,delete=False) as stream:
+            temporary=Path(stream.name)
+            stream.write(data); stream.flush(); os.fsync(stream.fileno())
+        try:
+            temporary.chmod(mode); os.replace(temporary,path)
+            descriptor=os.open(path.parent,os.O_RDONLY)
+            try: os.fsync(descriptor)
+            finally: os.close(descriptor)
+        finally: temporary.unlink(missing_ok=True)
+    files=[(core/name,BASE/name,0o600 if name=='fastload.py' else 0o700) for name in ('fastload.py','fastload_manager.py','update_proxy.py')]
+    files.extend((source,BASE/'patches'/source.name,0o600) for source in sorted((core/'patches').glob('*.patch')))
+    for source,destination,mode in files:
+        data=source.read_bytes()
+        previous=destination.read_bytes() if destination.is_file() else None
+        if previous==data: continue
+        if previous is not None: atomic(destination.with_name(destination.name+'.bak'),previous,mode)
+        atomic(destination,data,mode)
+
+
 def install_gateway(kind=None):
     launcher=BASE/'llama-server-wrapper.py'
     if not launcher.is_file(): raise RuntimeError('Install and configure RPC before saving a launch policy')
+    sync_manager_helpers()
     metadata_path=CONFIG/'model-gateway.json'
     metadata=read_json(metadata_path,{})
     content=launcher.read_text()

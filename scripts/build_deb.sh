@@ -29,6 +29,8 @@ runtime_paths=(
     "dual_spark/fastload_manager.py"
     "dual_spark/update_proxy.py"
     "dual_spark/patches/rpc-no-hash-cache.patch"
+    "dual_spark/patches/rpc-async-staging.patch"
+    "dual_spark/patches/rpc-graph-cache-profile.patch"
 )
 
 for source_path in \
