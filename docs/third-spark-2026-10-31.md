@@ -58,3 +58,5 @@ curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-uns
 Manual download: `bash "$HOME/Downloads/Spark-Link-1.4.0-arm64.run"`. Both installers include the isolated runtime and menu/desktop integration. [Full instructions](../desktop/README.md).
 
 Physical power-cut recovery and moving every possible port permutation were not tested. A running distributed model does not survive losing a required worker. The validated idle worker restart is distinct from hot model migration.
+
+Post-install cache qualification: the third-worker host client was compiled into its independent final cache path, with local library RUNPATH and a current manifest. With the second RPC temporarily stopped while idle, the gateway selected the primary+third pair through that client; after automatic restart it returned to all three. This also prevents later pruning of the first pair’s old cache from breaking the alternate pair.

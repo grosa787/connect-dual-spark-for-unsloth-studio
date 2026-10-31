@@ -172,5 +172,7 @@
     "cli": 138,
     "desktop": 58
   },
-  "rpc_restart_recovery_verified": true
+  "rpc_restart_recovery_verified": true,
+  "independent_third_worker_host_runtime_verified": true,
+  "alternate_pair_primary_and_third_verified": true
 }
