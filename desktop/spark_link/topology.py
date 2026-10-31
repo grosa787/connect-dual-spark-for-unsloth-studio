@@ -70,6 +70,39 @@ def validate_topology(value, require_targets=True):
     return copy.deepcopy(value)
 
 
+def select_port(value, cable_index, side, port):
+    """Edit one endpoint without breaking the triangle or mutating the caller."""
+    result=validate_topology(value,require_targets=False)
+    if (type(cable_index) is not int or not 0<=cable_index<len(result['cables'])
+            or side not in ('a','b') or type(port) is not int or port not in (0,1)):
+        raise ValueError('Некорректный разъём кабеля.')
+    cable=result['cables'][cable_index]
+    old=cable[side+'_port']
+    for index,other in enumerate(result['cables']):
+        if index==cable_index: continue
+        for endpoint in ('a','b'):
+            if other[endpoint]==cable[side] and other[endpoint+'_port']==port:
+                other[endpoint+'_port']=old
+    cable[side+'_port']=port
+    return validate_topology(result,require_targets=False)
+
+
+def resize_topology(value,count):
+    original=validate_topology(value,require_targets=False)
+    if type(count) is not int or count not in (2,3):
+        raise ValueError('Поддерживается два или три Spark.')
+    if count==len(original['nodes']): return original
+    result=default_topology(count)
+    result['nodes'][:2]=original['nodes'][:2]
+    pair=next(c for c in original['cables'] if {c['a'],c['b']}=={'head','worker2'})
+    result['cables'][0]=pair
+    if count==3:
+        for index,node in ((1,'head'),(2,'worker2')):
+            side='a' if pair['a']==node else 'b'
+            result['cables'][index]['a_port']=1-pair[side+'_port']
+    return validate_topology(result,require_targets=False)
+
+
 def compile_topology(value):
     value = validate_topology(value)
     plans = {n['id']: {'version': 1, 'node': n['id'], 'interfaces': {i: [] for i in INTERFACES}} for n in value['nodes']}

@@ -1,6 +1,10 @@
 """Runtime UI translations. Unmodified command output stays in its original language."""
 # Russian source text maps to English, German and Spanish, in that order.
 MESSAGES={
+ 'Кабели':('Cables','Kabel','Cables'),
+ 'Треугольник: 1 ↔ 2, 1 ↔ 3, 2 ↔ 3. У каждого Spark заняты оба порта.':('Triangle: 1 ↔ 2, 1 ↔ 3, 2 ↔ 3. Both ports on every Spark are used.','Dreieck: 1 ↔ 2, 1 ↔ 3, 2 ↔ 3. Beide Ports jedes Spark sind belegt.','Triángulo: 1 ↔ 2, 1 ↔ 3, 2 ↔ 3. Se usan ambos puertos de cada Spark.'),
+ 'При выборе занятого порта кабели этого Spark меняются портами в схеме.':('Choosing an occupied port swaps this Spark’s two cable endpoints in the layout.','Bei einem belegten Port werden die beiden Kabelenden dieses Spark im Plan getauscht.','Al elegir un puerto ocupado, los dos cables de ese Spark intercambian sus puertos en el esquema.'),
+ 'Третий Spark добавляется через поиск устройств. Проверка на трёх физических Spark ещё предстоит.':('Add the third Spark through device discovery. Testing on three physical Sparks is still pending.','Den dritten Spark über die Gerätesuche hinzufügen. Der Test mit drei physischen Spark steht noch aus.','Añade el tercer Spark desde la búsqueda de dispositivos. Queda pendiente probar tres Spark físicos.'),
  'Сзади':('Rear','Hinten','Detrás'),
  'Спереди':('Front','Vorne','Delante'),
  'Сверху':('Top','Oben','Arriba'),

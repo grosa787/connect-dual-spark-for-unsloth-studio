@@ -198,7 +198,7 @@ ApplicationWindow {
                         Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 200; radius: 16; color: "#e9eee4"; clip: true
                         ClusterScene {
                             objectName: "cableScene"
-                            anchors.fill: parent; nodes: manager.nodes; topology: manager.topology; selectedNode: window.selectedNode; editing: true
+                            anchors.fill: parent; nodes: manager.nodes; topology: manager.topology; selectedNode: window.selectedNode; editing: true; activeCable: window.activeCable
                             orientations:manager.orientations
                             onSelected: function(node,port) {
                                 window.selectedNode=node
@@ -207,30 +207,26 @@ ApplicationWindow {
                                 let id=manager.topology.nodes[node].id
                                 if(cable.a===id) manager.setPort(window.activeCable,'a',port)
                                 else if(cable.b===id) manager.setPort(window.activeCable,'b',port)
+                                else for(let i=0;i<manager.topology.cables.length;i++) {
+                                    let other=manager.topology.cables[i]
+                                    if((other.a===id && other.a_port===port) || (other.b===id && other.b_port===port)) { window.activeCable=i; break }
+                                }
                             }
                         }
                         RowLayout { anchors { top: parent.top; left: parent.left; margins: 14 } ActionButton { objectName: "twoNodes"; text: "2 Spark"; primary: manager.topology.nodes.length===2; enabled: !manager.busy; onClicked: { window.selectedNode=0; window.activeCable=0; manager.setCount(2) } } ActionButton { objectName: "threeNodes"; text: "3 Spark"; primary: manager.topology.nodes.length===3; enabled: !manager.busy; onClicked: { window.selectedNode=0; manager.setCount(3) } } }
                     }
+                    Text {
+                        visible: manager.topology.nodes.length===3
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        text: window.t("Треугольник: 1 ↔ 2, 1 ↔ 3, 2 ↔ 3. У каждого Spark заняты оба порта.")
+                        font.pixelSize: 12; font.weight: Font.DemiBold; color: "#3b5c2e"
+                    }
                     Text { Layout.fillWidth: true; text: window.t("Порт 0 ближе к обычному Ethernet, порт 1 — крайний. Если корпус повёрнут, они могут выглядеть верхним и нижним."); wrapMode: Text.WordWrap; font.pixelSize: 12; color: "#5f7059" }
-                    Repeater {
-                        model: manager.topology.cables
-                        Rectangle {
-                            id: cableRow
-                            required property var modelData
-                            required property int index
-                            Layout.fillWidth: true; implicitHeight: window.activeCable===index ? 98 : 48; radius: 10; color: window.activeCable===index ? "#edf4e3" : "#ffffff"; border.color: window.activeCable===index ? "#9ebf7a" : "#dce4d6"
-                            ColumnLayout {
-                                anchors { fill: parent; margins: 9 } spacing: 5
-                                RowLayout { Layout.fillWidth: true; ChoiceRadio { text: window.nodeName(cableRow.modelData.a)+"  ↔  "+window.nodeName(cableRow.modelData.b); checked: window.activeCable===cableRow.index; onClicked: window.activeCable=cableRow.index; font.pixelSize: 12 } }
-                                RowLayout {
-                                    visible: window.activeCable===cableRow.index
-                                    spacing: 8; Layout.fillWidth: true
-                                    SelectionBox { Layout.fillWidth: true; model: [window.t("Порт 0 · ближе к Ethernet"), window.t("Порт 1 · крайний")]; currentIndex: cableRow.modelData.a_port; enabled: !manager.busy; font.pixelSize: 12; onActivated: manager.setPort(cableRow.index,'a',currentIndex); Accessible.name: window.t("Порт первого конца кабеля") }
-                                    Text { text: "↔"; color: "#62765a" }
-                                    SelectionBox { objectName: "cableB_"+cableRow.index; Layout.fillWidth: true; model: [window.t("Порт 0 · ближе к Ethernet"), window.t("Порт 1 · крайний")]; currentIndex: cableRow.modelData.b_port; enabled: !manager.busy; font.pixelSize: 12; onActivated: manager.setPort(cableRow.index,'b',currentIndex); Accessible.name: window.t("Порт второго конца кабеля") }
-                                }
-                            }
-                        }
+                    CableEditor {
+                        Layout.fillWidth: true
+                        topology: manager.topology; selectedIndex: window.activeCable; busy: manager.busy
+                        onSelected: function(index) { window.activeCable=index }
+                        onPortSelected: function(index,side,port) { manager.setPort(index,side,port) }
                     }
                 }
                 Rectangle {
@@ -263,11 +259,11 @@ ApplicationWindow {
                                 }
                             }
                         }
-                        Text { Layout.fillWidth:true; text:window.t("Только вид в 3D. Сеть и разъёмы не меняются."); wrapMode:Text.WordWrap; color:"#63725d"; font.pixelSize:12 }
+                        Text { Layout.fillWidth:true; text:manager.topology.nodes.length===3 ? window.t("При выборе занятого порта кабели этого Spark меняются портами в схеме.") : window.t("Только вид в 3D. Сеть и разъёмы не меняются."); wrapMode:Text.WordWrap; color:"#63725d"; font.pixelSize:12 }
                         Rectangle { Layout.fillWidth: true; height: 1; color: "#e3e9de" }
                         Text { text: window.t("Как переключить порт"); font.pixelSize: 14; font.weight: Font.DemiBold; color: "#36532f" }
                         Text { Layout.fillWidth: true; text: window.t("Выгрузите модели. Переставьте кабель. Выберите разъёмы на схеме и примените подключение. Следующий запуск использует новую сеть."); wrapMode: Text.WordWrap; font.pixelSize: 13; color: "#63755c"; lineHeight: 1.25 }
-                        Text { Layout.fillWidth: true; text: manager.topology.nodes.length===3 ? window.t("SSH третьего Spark настраивается через NVIDIA Sync. Режим трёх устройств экспериментальный до аппаратной проверки.") : window.t("Адреса кластера сохраняются при переносе кабеля на другой порт."); wrapMode: Text.WordWrap; font.pixelSize: 12; color: "#71816a" }
+                        Text { Layout.fillWidth: true; text: manager.topology.nodes.length===3 ? window.t("Третий Spark добавляется через поиск устройств. Проверка на трёх физических Spark ещё предстоит.") : window.t("Адреса кластера сохраняются при переносе кабеля на другой порт."); wrapMode: Text.WordWrap; font.pixelSize: 12; color: "#71816a" }
                         Item { Layout.fillHeight: true }
                         ActionButton { Layout.fillWidth: true; text: window.t("Проверить устройства"); enabled: !manager.busy; onClicked: { manager.refresh(); devices.search() } }
                         ActionButton { visible:devices.pending; Layout.fillWidth:true; text:window.t("Повторить настройку"); enabled:!manager.busy; onClicked:devices.retrySetup() }

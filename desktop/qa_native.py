@@ -102,7 +102,27 @@ click('nav_1')
 click('threeNodes')
 assert len(backend.topology['nodes'])==3
 assert not backend.nodes[2]['online']
+click('cameraFront'); click('cameraReset')
+assert scene.property('yaw')==0 and scene.property('pitch')==32
+from spark_link.topology import validate_topology
+validate_topology(backend._topology,require_targets=False)
+click('selectCable_2')
+assert window.property('activeCable')==2
+click('selectCable_0')
+combo=find('cableA_0'); combo.forceActiveFocus()
+QTest.keyClick(window,Qt.Key.Key_Down); wait(300)
+assert backend.topology['cables'][0]['a_port']==1
+assert backend.topology['cables'][1]['a_port']==0
+validate_topology(backend._topology,require_targets=False)
+backend.setPort(0,'a',0); wait(300)
 window.grabWindow().save(str(folder/'three-nodes.png'))
+backend.setOrientation(2,True); wait(400)
+for language in ('ru','en','de','es'):
+    backend.setLanguage(language); wait(300)
+    window.grabWindow().save(str(folder/f'triangle-{language}.png'))
+window.resize(1000,700); wait(400)
+window.grabWindow().save(str(folder/'triangle-compact.png'))
+window.resize(1240,820); backend.setLanguage('ru'); wait(300)
 click('twoNodes')
 backend.refresh(); wait(6000)
 combo=find('cableB_0')

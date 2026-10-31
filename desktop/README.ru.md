@@ -6,6 +6,8 @@
 
 [Проверенное обновление среды: Unsloth 2026.10.11, llama.cpp b11985, текст и изображения на Q8 через два Spark](../docs/runtime-update-2026-10-31.ru.md).
 
+Spark Link 1.3.0 доработал редактор треугольника, сохраняет порты первой пары при добавлении третьего устройства и добавляет детали разъёмов. [Описание обновления](../docs/triangle-and-detail-2026-10-31.ru.md).
+
 Spark Link 1.2.0 получил новую модель DGX Spark с реальными пропорциями корпуса, пористыми панелями, утопленными разъёмами, передними ручками и кабелями, которые поворачиваются вместе с корпусом. Добавлены ракурсы камеры, масштаб и единый стиль полей ввода. Версия также включает общее ускорение RPC-загрузки и безопасно обновляет независимые управляющие файлы fastload, сохраняя пользовательские правила запуска. [Отчёт о скорости и пределе памяти Mistral](../docs/startup-and-mistral-2026-10-31.ru.md).
 
 ![Редактор подключения — русский интерфейс](../docs/images/ru/cables.png)
@@ -37,18 +39,18 @@ curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-uns
 
 ## Скачали файл вручную
 
-Самый простой вариант — [Spark-Link-1.2.0-arm64.run](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/download/desktop-v1.2.0/Spark-Link-1.2.0-arm64.run). После скачивания выполните:
+Самый простой вариант — [Spark-Link-1.3.0-arm64.run](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/download/desktop-v1.3.0/Spark-Link-1.3.0-arm64.run). После скачивания выполните:
 
 ```bash
-bash "$HOME/Downloads/Spark-Link-1.2.0-arm64.run"
+bash "$HOME/Downloads/Spark-Link-1.3.0-arm64.run"
 ```
 
 Если браузер сохраняет в «Загрузки», замените `Downloads` на фактический каталог. `chmod` и ручная распаковка не нужны. Установщик сам добавит приложение в меню.
 
-Для отдельно скачанного [tar.gz-архива](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/download/desktop-v1.2.0/Spark-Link-1.2.0-arm64.tar.gz) используйте:
+Для отдельно скачанного [tar.gz-архива](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/download/desktop-v1.3.0/Spark-Link-1.3.0-arm64.tar.gz) используйте:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash -s -- --archive "$HOME/Downloads/Spark-Link-1.2.0-arm64.tar.gz"
+curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash -s -- --archive "$HOME/Downloads/Spark-Link-1.3.0-arm64.tar.gz"
 ```
 
 Или распакуйте архив обычным архиватором, откройте терминал в полученной папке **Spark-Link** и выполните:

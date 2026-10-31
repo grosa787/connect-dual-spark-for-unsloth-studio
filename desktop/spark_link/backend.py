@@ -9,7 +9,7 @@ from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from .inventory import scan, discover_worker
 from .state import CONFIG, STATE, read_json, write_json
-from .topology import default_topology, validate_topology
+from .topology import default_topology, validate_topology, select_port, resize_topology
 from .preferences import ViewPreferences, LANGUAGES, port_anchor
 from .translations import translate
 from . import __version__
@@ -187,9 +187,7 @@ class Backend(QObject):
         self._infer_ports = False
         self._user_draft=True
         write_json(CONFIG/'draft-marker.json',True)
-        value = default_topology(count)
-        for index in range(min(count, len(self._topology['nodes']))):
-            value['nodes'][index] = self._topology['nodes'][index]
+        value = resize_topology(self._topology,count)
         self._topology = value
         previous = {n['id']:n for n in self._nodes}
         self._nodes = [{**previous.get(n['id'], {'online': False, 'error': 'Устройство ещё не подключено.'}), **n} for n in value['nodes']]
@@ -209,9 +207,11 @@ class Backend(QObject):
 
     @Slot(int, str, int)
     def setPort(self, cable, side, port):
-        if self._busy or side not in ('a', 'b') or port not in (0, 1): return
-        if self._topology['cables'][cable][side + '_port'] == port: return
-        self._topology['cables'][cable][side + '_port'] = port
+        if self._busy: return
+        try: updated=select_port(self._topology,cable,side,port)
+        except ValueError: return
+        if updated==self._topology: return
+        self._topology=updated
         self._user_draft=True
         write_json(CONFIG/'draft-marker.json',True)
         self._revision += 1

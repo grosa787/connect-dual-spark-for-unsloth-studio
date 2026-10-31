@@ -4,6 +4,7 @@ import struct
 from PySide6.QtCore import Property, Signal, QByteArray
 from PySide6.QtGui import QVector3D
 from PySide6.QtQuick3D import QQuick3DGeometry
+from .cable_path import cable_points
 
 
 def mesh(geometry, vertices, uv=False):
@@ -116,36 +117,35 @@ class Cable(QQuick3DGeometry):
         self.rebuild()
     def get_start(self): return self._start
     def set_start(self, value):
+        if self._start==value: return
         self._start = value
         self.rebuild()
         self.pointsChanged.emit()
     def get_end(self): return self._end
     def set_end(self, value):
+        if self._end==value: return
         self._end = value
         self.rebuild()
         self.pointsChanged.emit()
     start = Property(QVector3D, get_start, set_start, notify=pointsChanged)
     end = Property(QVector3D, get_end, set_end, notify=pointsChanged)
     def rebuild(self):
-        start, end = self._start, self._end
-        c1, c2 = start + QVector3D(0,8,135), end + QVector3D(0,8,135)
+        points=[QVector3D(*p) for p in cable_points(self._start.toTuple(),self._end.toTuple())]
         rings = []
-        for i in range(37):
-            t, s = i/36, 1-i/36
-            p = s*s*s*start + 3*s*s*t*c1 + 3*s*t*t*c2 + t*t*t*end
-            tangent = (3*s*s*(c1-start)+6*s*t*(c2-c1)+3*t*t*(end-c2)).normalized()
+        for i,p in enumerate(points):
+            tangent=(points[min(i+1,len(points)-1)]-points[max(i-1,0)]).normalized()
             right = QVector3D.crossProduct(tangent, QVector3D(0,1,0)).normalized()
             up = QVector3D.crossProduct(right, tangent).normalized()
             ring = []
-            for j in range(9):
-                angle = j*math.tau/8
+            for j in range(13):
+                angle = j*math.tau/12
                 normal = math.cos(angle)*right + math.sin(angle)*up
                 q = p + normal*3.2
                 ring.append([q.x(),q.y(),q.z(),normal.x(),normal.y(),normal.z()])
             rings.append(ring)
         vertices = []
-        for i in range(36):
-            for j in range(8):
+        for i in range(len(rings)-1):
+            for j in range(12):
                 for a,b in ((i,j),(i+1,j),(i+1,j+1),(i,j),(i+1,j+1),(i,j+1)):
                     vertices.extend(rings[a][b])
         mesh(self, vertices)

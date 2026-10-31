@@ -15,7 +15,10 @@ Node {
         id: chassis
         y: unit.vertical ? 49.75 : 0
         eulerRotation.z: unit.vertical ? 90 : 0
-        PrincipledMaterial { id: gold; baseColor: "#bdae87"; metalness: 0.22; roughness: 0.42 }
+        PrincipledMaterial {
+            id: gold; metalness: 0.22; roughness: 0.42
+            baseColorMap: Texture { source: "../assets/brushed-gold.svg"; generateMipmaps: true; mipFilter: Texture.Linear }
+        }
         PrincipledMaterial { id: edgeGold; baseColor: "#d0c09a"; metalness: 0.3; roughness: 0.34 }
         PrincipledMaterial { id: graphite; baseColor: "#191d1b"; roughness: 0.68 }
         PrincipledMaterial { id: steel; baseColor: "#939b96"; metalness: 0.78; roughness: 0.3 }
@@ -65,8 +68,26 @@ Node {
                 materials: graphite
             }
         }
+        // Recessed underside fasteners: modeled once per corner, not a texture grid.
+        Repeater3D {
+            model: 4
+            Node {
+                required property int index
+                x: index%2===0 ? -66 : 66; y: -22.9; z: index<2 ? -66 : 66
+                Model { source: "#Cylinder"; scale: Qt.vector3d(0.037,0.004,0.037); materials: steel }
+                Model { source: "#Cube"; y: -0.24; scale: Qt.vector3d(0.023,0.003,0.004); materials: graphite }
+                Model { source: "#Cube"; y: -0.25; scale: Qt.vector3d(0.004,0.003,0.023); materials: graphite }
+            }
+        }
         // Rear I/O: power, four USB-C, HDMI, Ethernet, two physical QSFP cages.
         Model { geometry: RoundedBox { flat: true; width: 137; height: 20.5; depth: 2; radius: 7 } y: -10.4; z: 75.7; materials: edgeGold }
+        Model {
+            source: "#Rectangle"; y: 3.1; z: 75.5; scale: Qt.vector3d(1.37,0.1,1)
+            materials: PrincipledMaterial {
+                baseColorMap: Texture { source: "../assets/io-legends.svg"; generateMipmaps: true; mipFilter: Texture.Linear }
+                alphaMode: PrincipledMaterial.Blend; roughness: 0.9
+            }
+        }
         Model { geometry: RoundedBox { flat: true; width: 2.4; height: 11; depth: 1; radius: 0.49 } x: -62; y: -10; z: 77; materials: steel }
         Repeater3D {
             model: 4
@@ -106,11 +127,32 @@ Node {
                     property int portIndex: cage.index
                 }
                 Model {
+                    visible: unit.ports.indexOf(cage.index)<0
+                    source: "#Rectangle"; z: 2.3; scale: Qt.vector3d(0.186,0.078,1)
+                    materials: PrincipledMaterial {
+                        baseColorMap: Texture { source: "../assets/qsfp-contacts.svg" }
+                        roughness: 0.6
+                    }
+                }
+                // Stamped cage rails and centre divider catch highlights at close range.
+                Model { source: "#Cube"; x: -10; z: 2; scale: Qt.vector3d(0.008,0.12,0.014); materials: steel }
+                Model { source: "#Cube"; x: 10; z: 2; scale: Qt.vector3d(0.008,0.12,0.014); materials: steel }
+                Model {
                     visible: unit.ports.indexOf(cage.index)>=0
                     geometry: RoundedBox { width: 18; height: 9; depth: 17; radius: 0.9 } z: 6.5
                     materials: steel; pickable: true
                     property int deviceIndex: unit.deviceIndex
                     property int portIndex: cage.index
+                }
+                Node {
+                    visible: unit.ports.indexOf(cage.index)>=0
+                    // DAC latch and molded strain-relief ribs follow the port orientation.
+                    Model { source: "#Cube"; y: 5; z: 8; scale: Qt.vector3d(0.16,0.012,0.074); materials: edgeGold }
+                    Model { source: "#Cube"; y: 5.8; z: 10; scale: Qt.vector3d(0.07,0.01,0.026); materials: steel }
+                    Repeater3D {
+                        model: 5
+                        Model { required property int index; source: "#Cube"; z: 11+index*1.7; scale: Qt.vector3d(0.156,0.079,0.008); materials: graphite }
+                    }
                 }
                 Model {
                     visible: unit.ports.indexOf(cage.index)>=0

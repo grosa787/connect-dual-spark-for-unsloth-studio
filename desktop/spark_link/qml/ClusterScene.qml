@@ -11,9 +11,17 @@ Item {
     property var orientations: []
     property int selectedNode: 0
     property bool editing: false
+    property int activeCable: -1
     property real yaw: 18
     property real pitch: 25
     property real zoom: 1
+    property int deviceCount: nodes.length
+    function resetView() {
+        zoom=1
+        yaw=deviceCount===3 ? 0 : 18
+        pitch=deviceCount===3 ? 32 : 25
+    }
+    onDeviceCountChanged: resetView()
     signal selected(int node, int port)
     function t(source) { let language=manager.language; return manager.translate(source) }
     function verticalFor(index) { return scene.orientations[index]===true }
@@ -59,8 +67,8 @@ Item {
         }
         PerspectiveCamera {
             id: camera
-            property real distance: scene.zoom*Math.max(scene.nodes.length===3 ? 800 : 570, (scene.nodes.length===3 ? 1200 : 940)/(scene.width/Math.max(1,scene.height)))
-            position: Qt.vector3d(0,20+distance*Math.sin(scene.pitch*Math.PI/180),distance*Math.cos(scene.pitch*Math.PI/180))
+            property real distance: scene.zoom*Math.max(scene.nodes.length===3 ? 930 : 570, (scene.nodes.length===3 ? 1660 : 940)/(scene.width/Math.max(1,scene.height)))
+            position: Qt.vector3d(0,(scene.nodes.length===3 ? 100 : 20)+distance*Math.sin(scene.pitch*Math.PI/180),distance*Math.cos(scene.pitch*Math.PI/180))
             eulerRotation.x: -scene.pitch; clipFar: 4000; fieldOfView: 34
         }
         DirectionalLight { eulerRotation: Qt.vector3d(-48,-35,0); brightness: 1; ambientColor: "#94978b"; castsShadow: true; shadowFactor: 28; shadowMapQuality: Light.ShadowMapQualityVeryHigh; shadowMapFar: 1200; shadowBias: 3 }
@@ -99,7 +107,7 @@ Item {
                         start: scene.anchorFor(cableModel.ai,cableModel.cable.a_port)
                         end: scene.anchorFor(cableModel.bi,cableModel.cable.b_port)
                     }
-                    materials: PrincipledMaterial { baseColor: cableModel.linked ? "#303c31" : "#7c8277"; roughness: 0.78 }
+                    materials: PrincipledMaterial { baseColor: scene.editing && scene.activeCable===cableModel.index ? "#66853d" : cableModel.linked ? "#303c31" : "#7c8277"; roughness: 0.78 }
                     castsShadows: true
                 }
             }
@@ -109,16 +117,35 @@ Item {
         model: scene.nodes.length
         Rectangle {
             required property int index
+            z: 1
             property vector3d projected: {
                 let angle=scene.yaw; let pitch=scene.pitch; let zoom=scene.zoom; let w=scene.width; let h=scene.height
                 let p=scene.positionFor(index)
                 return view.mapFrom3DScene(rig.mapPositionToScene(Qt.vector3d(p.x,scene.verticalFor(index) ? 145 : 49,p.z)))
             }
-            x: projected.x-width/2; y: projected.y-24
-            width: nameLabel.implicitWidth+24; height: 28; radius: 8
-            color: scene.selectedNode===index ? "#e0f1c9" : "#fdfefb"
+            x: {
+                let value=Math.max(6,Math.min(scene.width-width-6,projected.x-width/2))
+                if(scene.nodes.length===3 && index===0) return Math.min(value,scene.width/2-width-8)
+                if(scene.nodes.length===3 && index===1) return Math.max(value,scene.width/2+8)
+                return value
+            }
+            y: scene.nodes.length===3 && index===2 ? 72 : projected.y-24
+            width: Math.max(nameLabel.implicitWidth,statusLabel.implicitWidth)+24; height: scene.nodes[index].online ? 28 : 44; radius: 8
+            color: scene.selectedNode===index ? "#e0f1c9" : scene.nodes[index].online ? "#fdfefb" : "#f5f2e9"
             border.color: scene.selectedNode===index ? "#a5c77d" : "#d3dccb"
-            Text { id: nameLabel; anchors.centerIn: parent; text: (index+1)+" · "+scene.nodes[index].name; font.pixelSize: 11; font.weight: Font.Medium; color: "#385230" }
+            border.width: activeFocus ? 2 : 1
+            activeFocusOnTab: true
+            Accessible.role: Accessible.Button
+            Accessible.name: nameLabel.text
+            Accessible.onPressAction: scene.selected(index,-1)
+            Keys.onReturnPressed: scene.selected(index,-1)
+            Keys.onSpacePressed: scene.selected(index,-1)
+            Column {
+                anchors.centerIn: parent; spacing: 3
+                Text { id: nameLabel; anchors.horizontalCenter: parent.horizontalCenter; text: (index+1)+" · "+scene.nodes[index].name; font.pixelSize: 11; font.weight: Font.Medium; color: "#385230" }
+                Text { id: statusLabel; anchors.horizontalCenter: parent.horizontalCenter; visible: !scene.nodes[index].online; text: visible ? scene.t("Не подключён") : ""; font.pixelSize: 10; color: "#796c4c" }
+            }
+            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: scene.selected(index,-1) }
         }
     }
     MouseArea {
@@ -135,7 +162,7 @@ Item {
             let hit=view.pick(mouse.x,mouse.y)
             if(hit.objectHit && hit.objectHit.deviceIndex !== undefined) scene.selected(hit.objectHit.deviceIndex, hit.objectHit.portIndex)
         }
-        onDoubleClicked: { scene.yaw=18; scene.pitch=25; scene.zoom=1 }
+        onDoubleClicked: scene.resetView()
     }
     Rectangle {
         anchors { left: parent.left; bottom: parent.bottom; margins: 16 }
@@ -146,11 +173,11 @@ Item {
     RowLayout {
         anchors { right: parent.right; bottom: parent.bottom; margins: 12 }
         spacing: 5
-        SceneButton { objectName: "cameraRear"; text: scene.t("Сзади"); onClicked: { scene.yaw=0; scene.pitch=18 } }
-        SceneButton { objectName: "cameraFront"; text: scene.t("Спереди"); onClicked: { scene.yaw=180; scene.pitch=18 } }
-        SceneButton { objectName: "cameraTop"; text: scene.t("Сверху"); onClicked: { scene.yaw=0; scene.pitch=85 } }
-        SceneButton { text: "−"; Accessible.name: scene.t("Отдалить"); onClicked: scene.zoom=Math.min(1.6,scene.zoom*1.15) }
-        SceneButton { text: "+"; Accessible.name: scene.t("Приблизить"); onClicked: scene.zoom=Math.max(0.6,scene.zoom/1.15) }
-        SceneButton { objectName: "cameraReset"; text: "↺"; Accessible.name: scene.t("Сбросить вид"); onClicked: { scene.yaw=18; scene.pitch=25; scene.zoom=1 } }
+        SceneButton { objectName: "cameraRear"; text: scene.t("Сзади"); chosen: Math.abs(scene.yaw%360)<0.1 && scene.pitch===18; onClicked: { scene.yaw=0; scene.pitch=18 } }
+        SceneButton { objectName: "cameraFront"; text: scene.t("Спереди"); chosen: Math.abs(scene.yaw%360)===180 && scene.pitch===18; onClicked: { scene.yaw=180; scene.pitch=18 } }
+        SceneButton { objectName: "cameraTop"; text: scene.t("Сверху"); chosen: scene.pitch===85; onClicked: { scene.yaw=0; scene.pitch=85 } }
+        SceneButton { text: "−"; Accessible.name: scene.t("Отдалить"); enabled: scene.zoom<1.6; onClicked: scene.zoom=Math.min(1.6,scene.zoom*1.15) }
+        SceneButton { text: "+"; Accessible.name: scene.t("Приблизить"); enabled: scene.zoom>0.6; onClicked: scene.zoom=Math.max(0.6,scene.zoom/1.15) }
+        SceneButton { objectName: "cameraReset"; text: "↺"; Accessible.name: scene.t("Сбросить вид"); onClicked: scene.resetView() }
     }
 }

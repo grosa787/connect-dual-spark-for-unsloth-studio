@@ -2,6 +2,10 @@
 
 # Spark Link verification
 
+## Spark Link 1.3.0 verification
+
+138 CLI tests and all 49 desktop checks passed across the isolated/system runtimes. Triangle editing, preserved pair ports, three cable tabs, camera fit/reset, all four languages, compact layouts and hide/show rendering passed on real ARM64 Qt. [Triangle/detail report](../docs/triangle-and-detail-2026-10-31.md).
+
 ## Spark Link 1.2.0 verification (2026-10-31)
 
 - 138 CLI tests passed. The desktop suite ran 42 tests: 40 passed in the Qt runtime; the two PyYAML-dependent tests passed separately under Ubuntu system Python (five network tests in that run).
