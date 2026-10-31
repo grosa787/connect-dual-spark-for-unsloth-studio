@@ -32,6 +32,8 @@ Alternatively extract the archive in a file manager, open a terminal inside **Sp
 
 Version 1.1 adds independent upright/flat 3D orientation per device, Russian/English/German/Spanish UI, cable-neighbor discovery and native SSH onboarding, and a model memory planner. The release wheels target Ubuntu 24.04 ARM64 with Python 3.12.
 
+![Independent upright orientation](../docs/images/spark-link-upright.png)
+
 - **Overview:** live SSH/device/memory/model state and Studio shortcut.
 - **Cables and Spark:** native, rotatable 3D chassis and physical cable meshes, selectable QSFP connectors, keyboard-accessible selectors, two-device or three-device triangle topology.
 - **Installation:** bundled independent installation of Unsloth, build prerequisites and version-matched RPC.
