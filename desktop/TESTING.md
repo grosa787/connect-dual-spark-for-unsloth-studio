@@ -1,3 +1,5 @@
+**English** | [Русский](TESTING.ru.md) · [App instructions](README.md)
+
 # Verification — Spark Link 1.1.0
 
 Verified on 2026-10-31 with the available Ubuntu 24.04 ARM64 DGX Spark pair.

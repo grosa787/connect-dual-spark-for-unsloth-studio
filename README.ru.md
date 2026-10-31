@@ -1,4 +1,4 @@
-[English](README.md) | [Русский](README.ru.md)
+[English](README.md) | **Русский**
 
 # Connect Dual Spark для Unsloth Studio
 
@@ -10,7 +10,9 @@
 curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash
 ```
 
-![Нативное приложение Spark Link](docs/images/spark-link-overview.png)
+![Spark Link — русский интерфейс](docs/images/ru/overview.png)
+
+Ссылки **English / Русский** в начале страницы переключают документацию и скриншоты приложения на выбранный язык. В самом Spark Link выберите **Язык приложения → Русский** или **English** внизу левой панели: интерфейс переключится сразу и запомнит выбор. [Язык интерфейса и скриншоты](desktop/README.ru.md#язык-интерфейса).
 
 ## Отдельная CLI-программа
 

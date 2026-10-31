@@ -1,8 +1,21 @@
+**English** | [Русский](README.ru.md) · [Project home](../README.md)
+
 # Spark Link native desktop app
 
 An independently installable Qt Quick / Qt Quick 3D app for Ubuntu 24.04+ ARM64 on the primary NVIDIA DGX Spark. It bundles its own management engine and Qt runtime; the CLI does not need to be installed. The CLI also works without the app. They manage the same Studio/RPC installation, so do not run simultaneous installation/update jobs.
 
-![Native cabling editor](../docs/images/spark-link-cables.png)
+![Spark Link cable editor — English interface](../docs/images/en/cables.png)
+
+## Interface language
+
+This English guide shows the app in English. Select [Русский](README.ru.md) for the Russian guide and Russian screenshots.
+
+In the app, open the **Application language** selector at the bottom of the left sidebar and choose **English** or **Русский**. Text changes immediately, including tabs, buttons, status labels and dialogs. The app saves the language for subsequent launches. German and Spanish remain available too. The GitHub documentation language and your installed app's saved language are separate choices.
+
+| Documentation and previews | App language selector |
+| --- | --- |
+| [English](README.md) | English |
+| [Русский](README.ru.md) | Русский |
 
 ## Download and install
 
@@ -32,14 +45,14 @@ Alternatively extract the archive in a file manager, open a terminal inside **Sp
 
 Version 1.1 adds independent upright/flat 3D orientation per device, Russian/English/German/Spanish UI, cable-neighbor discovery and native SSH onboarding, and a model memory planner. The release wheels target Ubuntu 24.04 ARM64 with Python 3.12.
 
-![Independent upright orientation](../docs/images/spark-link-upright.png)
-
 - **Overview:** live SSH/device/memory/model state and Studio shortcut.
 - **Cables and Spark:** native, rotatable 3D chassis and physical cable meshes, selectable QSFP connectors, keyboard-accessible selectors, two-device or three-device triangle topology.
 - **Installation:** bundled independent installation of Unsloth, build prerequisites and version-matched RPC.
 - **Updates:** official Studio updater, compatible host/worker rebuild, RPC service startup and app update.
 - **Journal:** real command output and persistent logs under `~/.local/state/spark-link`.
 - **Model memory:** Hugging Face ID/HTTPS URL or local GGUF, quantization/shard metadata, declared context ceiling, known-architecture KV estimates or an explicit unknown/manual budget, automatic primary-biased reserves and editable percentages/GiB. Plans bind to a specific model variant and apply at its next launch. Layer boundaries make allocations approximate; launch-time free-memory validation runs again.
+
+![Model memory planner — English interface](../docs/images/en/memory.png)
 
 New cable-connected Sparks are discovered over ConnectX-7 neighbors. After the OS and SSH server have been prepared, the app displays the candidate and SSH fingerprint, asks for its account login/password, pins its host key, infers cabling and installs dependencies/RPC. No manual IP entry is required. Initial software downloads need internet. Active models defer configuration. Hardware validation of a third Spark remains pending.
 
@@ -80,4 +93,4 @@ python3 scripts/build_desktop.py --wheels /tmp/spark-link-wheels
 PYTHONPATH=desktop python3 -m unittest discover -s desktop/tests -v
 ```
 
-The desktop app is GPL-3.0-or-later; bundled `dual_spark` remains MIT. See [third-party notices](THIRD_PARTY_NOTICES.md), [Russian instructions](README.ru.md), and [the main CLI documentation](../README.md).
+The desktop app is GPL-3.0-or-later; bundled `dual_spark` remains MIT. See [verification and limitations](TESTING.md), [third-party notices](THIRD_PARTY_NOTICES.md), [Russian instructions](README.ru.md), and [the main CLI documentation](../README.md).

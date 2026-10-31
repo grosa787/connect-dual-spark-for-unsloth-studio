@@ -47,6 +47,7 @@ def click(name):
     assert item is not None, name
     point=item.mapToScene(QPointF(item.width()/2,item.height()/2))
     QTest.mouseClick(window,Qt.MouseButton.LeftButton,Qt.KeyboardModifier.NoModifier,QPoint(int(point.x()),int(point.y())))
+    QTest.mouseMove(window,QPoint(260,40))
     wait(350)
 def find(name):
     pending=[window.contentItem()]

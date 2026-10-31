@@ -1,4 +1,4 @@
-[English](README.md) | [Русский](README.ru.md)
+**English** | [Русский](README.ru.md)
 
 # Connect Dual Spark for Unsloth Studio
 
@@ -10,7 +10,9 @@ A separate native app with a 3D cable editor, installation and update controls i
 curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash
 ```
 
-![Spark Link native app](docs/images/spark-link-overview.png)
+![Spark Link — English interface](docs/images/en/overview.png)
+
+Choose **English / Русский** at the top of this page for documentation and app previews in that language. In Spark Link, use **Application language → English** or **Русский** in the lower-left sidebar; the interface changes immediately and remembers your choice. [Interface language and screenshots](desktop/README.md#interface-language).
 
 ## Independent CLI installer
 
