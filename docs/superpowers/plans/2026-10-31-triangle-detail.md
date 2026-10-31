@@ -20,7 +20,9 @@ the focal point, rather than extra decoration.
 - [x] Add connector latches, boot ribs, cage seams, fasteners, labels and lid grain.
 - [x] Real ARM64 Qt checks: two/three devices, four languages, compact layout,
   physical port draft changes, repeated hide/show, installed background and menu.
-- [ ] Install and publish 1.3.0 with Russian/English instructions and screenshots.
+- [x] Install and publish 1.3.0 with Russian/English instructions and screenshots.
 
 The real cluster still has two Spark devices. Three-node software/rendering
 checks do not qualify a third physical device or live cable removal.
+
+Published and installed: [desktop-v1.3.0](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.3.0). Both uploaded asset digests match the locally verified installers.
