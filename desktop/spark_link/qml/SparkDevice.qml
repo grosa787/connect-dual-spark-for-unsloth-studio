@@ -9,6 +9,11 @@ Node {
     property var ports: []
     property var activePorts: []
     property bool online: false
+    property bool vertical: false
+    Node {
+        id: chassis
+        y: unit.vertical ? 44 : 0
+        eulerRotation.z: unit.vertical ? 90 : 0
     PrincipledMaterial { id: gold; baseColor: "#c9b78b"; metalness: 0.3; roughness: 0.34 }
     PrincipledMaterial { id: edgeGold; baseColor: "#dbc79b"; metalness: 0.35; roughness: 0.29 }
     PrincipledMaterial { id: graphite; baseColor: "#232724"; roughness: 0.65 }
@@ -81,9 +86,10 @@ Node {
             Model { source: "#Cube"; y: -10; z: -74.6; scale: Qt.vector3d(0.032,0.12,0.012); materials: graphite }
         }
     }
-    // Discrete floor selection halo; no perpetual animation.
+    }
+    // Orientation does not change the ground plane or physical port IDs.
     Model {
-        source: "#Cylinder"; y: -28; scale: Qt.vector3d(1.23,0.015,1.23)
+        source: "#Cylinder"; y: -28; scale: Qt.vector3d(unit.vertical ? 0.6 : 1.23,0.015,unit.vertical ? 1.6 : 1.23)
         materials: PrincipledMaterial { baseColor: unit.selected ? "#b5e866" : "#d6ded0"; roughness: 0.9 }
         receivesShadows: true
     }

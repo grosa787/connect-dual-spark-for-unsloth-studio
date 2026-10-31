@@ -21,7 +21,7 @@ for line in pathlib.Path('/proc/meminfo').read_text().splitlines():
     key, val = line.split(':', 1)
     mem[key] = int(val.strip().split()[0])
 interfaces = {}
-addresses = json.loads(run(['ip', '-j', '-4', 'addr']) or '[]')
+addresses = json.loads(run(['ip', '-j', 'addr']) or '[]')
 for item in addresses:
     name = item['ifname']
     driver = run(['ethtool', '-i', name]) if 'np' in name else ''
@@ -31,11 +31,17 @@ for item in addresses:
     def read(attr, default='0'):
         try: return (base / attr).read_text().strip()
         except OSError: return default
-    interfaces[name] = {'carrier': read('carrier') == '1', 'speed': max(0, int(read('speed', '0'))),
-        'addresses': [x['local'] for x in item.get('addr_info', []) if x['family'] == 'inet']}
+    interfaces[name] = {'carrier': read('carrier') == '1', 'speed': max(0, int(read('speed', '0'))), 'mac': item.get('address',''),
+        'addresses': [x['local'] for x in item.get('addr_info', []) if x['family'] == 'inet'],
+        'ipv6': [x['local'] for x in item.get('addr_info', []) if x['family'] == 'inet6' and x.get('scope')=='link']}
 studio = pathlib.Path.home() / '.unsloth/studio/unsloth_studio/bin/unsloth'
 disk = shutil.disk_usage(pathlib.Path.home())
+defaults=json.loads(run(['ip','-j','route','show','default']) or '[]')
+management_iface=defaults[0].get('dev','') if defaults else ''
+management_ip=next((a['local'] for i in addresses if i['ifname']==management_iface for a in i.get('addr_info',[]) if a['family']=='inet'),'')
 print(json.dumps({'hostname': socket.gethostname(), 'user': os.environ.get('USER', ''), 'home': str(pathlib.Path.home()),
+    'machine_id': pathlib.Path('/etc/machine-id').read_text().strip(), 'management_ip': management_ip,
+    'neighbors': json.loads(run(['ip','-j','neigh','show']) or '[]'),
     'arch': platform.machine(), 'gpu': run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader']),
     'memory_total': mem['MemTotal'], 'memory_available': mem['MemAvailable'], 'memory_used': mem['MemTotal']-mem['MemAvailable'],
     'disk_available': disk.free, 'interfaces': interfaces, 'model_active': bool(run(['pgrep', '-x', 'llama-server'])),
@@ -58,25 +64,33 @@ def identity_file(target='10.100.32.2'):
     return identity_file() if target != '10.100.32.2' else ''
 
 
-def ssh_argv(target, tty=False, identity=None):
+def ssh_argv(target, tty=False, identity=None, host_key_alias=None):
     command = ['ssh', '-tt' if tty else '-T', '-o', 'ConnectTimeout=5',
                '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=2',
+               '-o', 'ForwardAgent=no','-o','ForwardX11=no',
                '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new']
     identity = identity or identity_file(target)
     if identity:
-        command += ['-i', identity]
+        command += ['-i', identity,'-o','IdentitiesOnly=yes']
+    if host_key_alias:
+        command += ['-o','HostKeyAlias='+host_key_alias]
     return command + [safe_target(target)]
+
+def node_ssh(node,tty=False):
+    return ssh_argv(node['ssh'],tty=tty,identity=node.get('identity'),host_key_alias=node.get('host_key_alias'))
 
 
 def probe(node):
     if not node.get('local') and not node.get('ssh'):
         return {**node, 'online': False, 'error': 'Укажите SSH-имя или подключите Spark через NVIDIA Sync.'}
-    command = [sys.executable, '-c', PROBE] if node.get('local') else ssh_argv(node['ssh'], identity=node.get('identity')) + ['python3 -c ' + shlex.quote(PROBE)]
+    command = [sys.executable, '-c', PROBE] if node.get('local') else node_ssh(node) + ['python3 -c ' + shlex.quote(PROBE)]
     try:
         result = subprocess.run(command, capture_output=True, text=True, timeout=28)
         if result.returncode:
             raise RuntimeError(result.stderr.strip()[-350:] or 'Spark не ответил на диагностику.')
         data = json.loads(result.stdout)
+        if node.get('machine_id') and data.get('machine_id')!=node['machine_id']:
+            raise RuntimeError('Device identity changed; reconnect with explicit authorization.')
         if 'GB10' not in data['gpu']:
             raise RuntimeError('На устройстве не обнаружена GPU GB10.')
         return {**node, **data, 'online': True, 'error': ''}

@@ -4,7 +4,7 @@
 
 ## Нативное приложение Spark Link
 
-Отдельное приложение с 3D-схемой кабелей, установкой и обновлениями. Оно не требует установленной CLI. [Полная инструкция](desktop/README.ru.md) · [Скачать приложение](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.0.0).
+Отдельное приложение с 3D-схемой кабелей, установкой и обновлениями. Оно не требует установленной CLI. [Полная инструкция](desktop/README.ru.md) · [Скачать приложение](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.1.0).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash

@@ -10,9 +10,10 @@ import subprocess
 import sys
 import tempfile
 import time
-from .inventory import scan, ssh_argv, identity_file
+from .inventory import scan, ssh_argv, identity_file,node_ssh
 from .state import CONFIG, STATE, read_json, write_json
 from .topology import compile_topology, validate_topology
+from .admin import privileged,gui_runner
 
 GUARD = Path.home() / '.local/share/connect-dual-spark/llama-server-wrapper.json'
 STUDIO = Path.home() / '.unsloth/studio/unsloth_studio/bin/unsloth'
@@ -31,6 +32,18 @@ def assert_idle(nodes):
         raise RuntimeError('Сначала выгрузите модели в Studio. Сейчас выполняется llama-server.')
 
 
+def wait_studio():
+    from urllib.request import urlopen
+    for attempt in range(30):
+        try:
+            with urlopen('http://127.0.0.1:8888/api/health',timeout=2) as response:
+                if response.status==200: return
+        except Exception:
+            pass
+        time.sleep(1)
+    raise RuntimeError('Studio не ответила на проверку готовности. Посмотрите журнал и свободную память.')
+
+
 def plan_matches(node, plan):
     interfaces = node.get('interfaces', {})
     for iface, addresses in plan['interfaces'].items():
@@ -42,7 +55,7 @@ def plan_matches(node, plan):
 
 
 def remote_output(node, command):
-    return subprocess.check_output(ssh_argv(node['ssh'], identity=node.get('identity')) + [command], text=True, timeout=20).strip()
+    return subprocess.check_output(node_ssh(node) + [command], text=True, timeout=20).strip()
 
 
 def verify_links(topology, nodes, plans):
@@ -61,7 +74,7 @@ def verify_links(topology, nodes, plans):
             if not route or route[0].get('dev') != device:
                 raise RuntimeError(f"{node['name']}: маршрут к соседу идёт через другой интерфейс.")
             ping = ['ping','-c','2','-W','2','-I',local_ip,remote_ip]
-            run(ping if node.get('local') else ssh_argv(node['ssh'],identity=node.get('identity'))+[shlex.join(ping)], stdout=subprocess.DEVNULL, timeout=12)
+            run(ping if node.get('local') else node_ssh(node)+[shlex.join(ping)], stdout=subprocess.DEVNULL, timeout=12)
 
 
 def apply_topology(topology):
@@ -87,7 +100,7 @@ def apply_topology(topology):
                 path = Path(temp) / 'plan.json'
                 write_json(path, plan)
                 if node.get('local'):
-                    result = run(['sudo', '/usr/bin/python3', helper, '--plan', path], stdout=subprocess.PIPE, text=True)
+                    result = privileged(node,['/usr/bin/python3',helper,'--plan',path],capture=True)
                     location = str(helper)
                 else:
                     remote = remote_output(node, 'mktemp -d /tmp/spark-link-net.XXXXXX')
@@ -96,10 +109,11 @@ def apply_topology(topology):
                     scp = ['scp', '-o', 'BatchMode=yes']
                     identity = node.get('identity') or identity_file(node['ssh'])
                     if identity: scp += ['-i', identity]
+                    if node.get('host_key_alias'): scp += ['-o','HostKeyAlias='+node['host_key_alias']]
+                    scp += ['-o','StrictHostKeyChecking=accept-new']
                     run(scp + [helper, path, node['ssh'] + ':' + remote + '/'])
                     location = remote + '/network_helper.py'
-                    command = 'sudo /usr/bin/python3 ' + shlex.quote(location) + ' --plan ' + shlex.quote(remote + '/plan.json')
-                    result = run(ssh_argv(node['ssh'], tty=True, identity=node.get('identity')) + [command], stdout=subprocess.PIPE, text=True)
+                    result = privileged(node,['/usr/bin/python3',location,'--plan',remote+'/plan.json'],capture=True)
                 print(result.stdout, flush=True)
                 receipts = [json.loads(line) for line in result.stdout.splitlines() if line.strip().startswith('{')]
                 if not receipts: raise RuntimeError('Сетевая операция не вернула подтверждение.')
@@ -135,9 +149,9 @@ def apply_topology(topology):
             print(f"Откат сети: {node['name']}", flush=True)
             try:
                 if node.get('local'):
-                    run(['sudo', '/usr/bin/python3', location, '--rollback', backup])
+                    privileged(node,['/usr/bin/python3',location,'--rollback',backup])
                 else:
-                    run(ssh_argv(node['ssh'], tty=True) + [shlex.join(['sudo', '/usr/bin/python3', location, '--rollback', backup])])
+                    privileged(node,['/usr/bin/python3',location,'--rollback',backup])
             except Exception as exc:
                 print('Не удалось автоматически откатить сеть: ' + str(exc), flush=True)
         raise
@@ -160,27 +174,53 @@ def update_studio():
     active = subprocess.run(['systemctl', '--user', 'is-active', '--quiet', SERVICE]).returncode == 0
     watcher = 'connect-dual-spark-refresh.path'
     watching = subprocess.run(['systemctl', '--user', 'is-active', '--quiet', watcher]).returncode == 0
+    snapshot=None
     try:
         if watching: run(['systemctl', '--user', 'stop', watcher])
         if active: run(['systemctl', '--user', 'stop', SERVICE])
+        if STUDIO.parent.name=='bin' and STUDIO.parent.parent.name=='unsloth_studio':
+            from .recovery import make_snapshot
+            snapshot=make_snapshot()
         run([STUDIO, 'studio', 'update'])
         if manager.is_file():
             run([sys.executable, manager, 'refresh', '--config', GUARD])
             run([sys.executable, manager, 'status', '--config', GUARD])
+            from .multi import manager_for
+            for config in read_json(CONFIG/'cluster-runtime.json',{}).get('peers',[])[1:]:
+                result=manager_for(config).refresh(config)
+                if result.state not in ('current','promoted'): raise RuntimeError('Worker update was deferred')
+                if manager_for(config).status(config)['state']!='current': raise RuntimeError('Worker version did not match after update')
+        if active and snapshot:
+            run(['systemctl','--user','start',SERVICE])
+            wait_studio()
         print('Unsloth и версия RPC согласованы. Пользовательская оболочка сохранена.', flush=True)
+    except BaseException:
+        if snapshot:
+            from .recovery import restore_snapshot
+            run(['systemctl','--user','stop',SERVICE])
+            restore_snapshot(snapshot)
+            if manager.is_file(): run([sys.executable,manager,'refresh','--config',GUARD])
+        raise
     finally:
         if watching: run(['systemctl', '--user', 'start', watcher])
         if active: run(['systemctl', '--user', 'start', SERVICE])
+    if snapshot:
+        from .recovery import PENDING
+        write_json(PENDING,None)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['install', 'update', 'update-app', 'refresh', 'check', 'rpc-logs', 'start-rpc', 'topology', 'start-studio'])
+    parser.add_argument('action', choices=['install', 'update', 'update-app', 'refresh', 'check', 'rpc-logs', 'start-rpc', 'topology', 'start-studio','recover'])
     parser.add_argument('--plan')
+    parser.add_argument('--non-interactive',action='store_true')
     args = parser.parse_args()
     STATE.mkdir(parents=True, exist_ok=True)
     try:
-        if args.action == 'rpc-logs':
+        if args.action=='recover':
+            from .recovery import recover
+            recover(validate_topology(read_json(CONFIG/'topology.json')),interactive=not args.non_interactive)
+        elif args.action == 'rpc-logs':
             topology=validate_topology(read_json(CONFIG/'topology.json'))
             run(['journalctl','--user','-u',SERVICE,'-n','50','--no-pager','-o','cat'])
             for node in topology['nodes'][1:]:
@@ -202,14 +242,7 @@ def main():
             run([sys.executable, GUARD.with_name('fastload_manager.py'), 'refresh', '--config', GUARD])
         elif args.action == 'start-studio':
             run(['systemctl', '--user', 'start', SERVICE])
-            from urllib.request import urlopen
-            for attempt in range(30):
-                try:
-                    with urlopen('http://127.0.0.1:8888/api/health',timeout=2) as response:
-                        if response.status==200: break
-                except Exception:
-                    time.sleep(1)
-            else: raise RuntimeError('Studio не ответила на проверку готовности. Посмотрите журнал и свободную память.')
+            wait_studio()
         elif args.action in ('install', 'start-rpc') and len(read_json(CONFIG / 'topology.json', {}).get('nodes', [])) == 3:
             from .multi import setup_multi
             topology = validate_topology(read_json(CONFIG / 'topology.json'))
@@ -230,7 +263,8 @@ def main():
             configs = read_json(CONFIG / 'cluster-runtime.json', {}).get('peers') or [read_json(GUARD)]
             for config in configs:
                 if not config: raise RuntimeError('RPC ещё не настроен. Откройте «Установка».')
-                status = FastloadManager(GUARD.parent).status(config)
+                from .multi import manager_for
+                status = manager_for(config).status(config)
                 print(config['rpc'] + ': ' + status['message'])
                 if status['state'] != 'current': raise RuntimeError('Версия RPC не согласована. Откройте «Обновления».')
             print('SSH, выбранные порты и версии RPC проверены.')
@@ -240,7 +274,9 @@ def main():
             from dual_spark.language import set_language
             from dual_spark.workflow import SetupWorkflow
             set_language('ru')
-            installer = Installer(Runner(verbose=True))
+            topology=read_json(CONFIG/'topology.json',{})
+            worker=topology.get('nodes',[{},{}])[1] if len(topology.get('nodes',[]))>1 else None
+            installer = Installer(gui_runner(worker))
             installer._show_rpc_logs = lambda: None
             if args.action == 'install':
                 # Existing custom launchers are user-owned and must survive app installation.
@@ -254,6 +290,9 @@ def main():
                     installer.bootstrap = True
                     installer.offer_studio = lambda: False
                     SetupWorkflow(installer).run()
+                if GUARD.with_suffix('.py').is_file():
+                    from .model_policy import install_gateway
+                    install_gateway()
             elif args.action == 'check':
                 installer.check()
                 installer.status()

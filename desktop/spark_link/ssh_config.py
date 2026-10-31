@@ -20,6 +20,8 @@ def ensure_cluster_ssh(nodes):
             if any(ord(c)<32 for c in identity): raise ValueError('Некорректный путь SSH-ключа.')
             escaped=identity.replace('\\','\\\\').replace('"','\\"')
             lines += ['  IdentityFile "'+escaped+'"','  IdentitiesOnly yes']
+        alias=node.get('host_key_alias')
+        if alias and re.fullmatch(r'spark-link-[a-f0-9]{16,64}',alias): lines += ['  HostKeyAlias '+alias]
     path=directory/'spark-link.conf'
     path.write_text('\n'.join(lines)+'\n')
     path.chmod(0o600)

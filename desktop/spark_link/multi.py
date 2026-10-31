@@ -16,6 +16,16 @@ import time
 from .state import CONFIG, STATE, read_json, write_json
 from .topology import compile_topology
 
+def manager_base(config):
+    base=Path.home()/'.local/share/connect-dual-spark'
+    chosen=Path(config.get('manager_base',base))
+    if chosen not in (base,base/'pairs/worker3'): raise ValueError('Invalid per-worker manager location')
+    return chosen
+
+def manager_for(config):
+    from dual_spark.fastload_manager import FastloadManager
+    return FastloadManager(manager_base(config))
+
 
 def model_command(binary, args, endpoints, mode='both'):
     options = {'--rpc', '--device', '-dev', '--tensor-split', '-ts', '--split-mode', '-sm', '--main-gpu', '-mg', '--n-gpu-layers', '--gpu-layers', '-ngl', '--load-mode', '-lm', '--spec-draft-device', '-devd', '--device-draft', '--mmproj-device', '-mmdev'}
@@ -77,22 +87,35 @@ def setup_multi(topology, nodes):
         host_ip, worker_ip = f'10.100.{subnet}.1', f'10.100.{subnet}.2'
         host_iface = next(i for i,a in plans['head']['interfaces'].items() if host_ip+'/24' in a)
         worker_iface = next(i for i,a in plans[node['id']]['interfaces'].items() if worker_ip+'/24' in a)
-        installer = Installer(Runner(verbose=True))
+        from .admin import gui_runner,privileged
+        installer = Installer(gui_runner(node))
         installer._show_rpc_logs = lambda: None
+        pair_base=base if index==0 else base/'pairs'/node['id']
+        if pair_base!=base:
+            pair_base.mkdir(parents=True,exist_ok=True,mode=0o700)
+            installer.base=pair_base
+            installer.server=pair_base/'fastload/current/source/build/bin/llama-server'
+            installer._llama_wrapper_path=lambda:pair_base/'llama-server-wrapper.py'
+            # Each worker has its own verified binary manifest. Absolute source
+            # paths/compiler details may differ while the RPC source is identical.
+            stub=pair_base/'llama-server-wrapper.py'
+            stub.write_text('#!/usr/bin/python3\nimport os,sys\nos.execv('+repr(str(base/'llama-server-wrapper.py'))+', ['+repr(str(base/'llama-server-wrapper.py'))+', *sys.argv[1:]])\n')
+            stub.chmod(0o700)
         installer.peer = Peer(host_ip, host_iface, worker_ip, worker_iface, node['user'], node['home'], node['hostname'], 200000)
         installer.worker_exec_path = installer._existing_rpc_exec_path()
         installer.bootstrap = True
         installer.preflight()
         installer.install_studio()
         config = installer._llama_guard_config(installer.server)
+        config['node_id']=node['id']
+        config['manager_base']=str(pair_base)
         if not (base/'llama-server-wrapper.py').is_file():
             installer.install_llama_guard(allow_pending=True)
         check = 'command -v cmake && command -v rsync && dpkg-query -W libibverbs-dev librdmacm-dev >/dev/null 2>&1'
         try: installer._worker(check)
         except Exception:
-            command = 'sudo apt-get update && sudo apt-get install -y cmake build-essential rsync libibverbs-dev librdmacm-dev'
-            subprocess.run(remote_ssh(installer.peer, command, tty=True), check=True)
-        result = FastloadManager(base).ensure(config)
+            privileged(node,['bash','-c','apt-get update && apt-get install -y cmake build-essential rsync libibverbs-dev librdmacm-dev'])
+        result = manager_for(config).ensure(config)
         if result.state not in ('current','promoted'):
             raise RuntimeError('Сборка RPC отложена: выгрузите активную модель.')
         installer.start_rpc()
@@ -100,18 +123,8 @@ def setup_multi(topology, nodes):
         configs.append(config)
     write_json(CONFIG/'cluster-runtime.json', {'version':1,'peers':configs})
     write_json(base/'llama-server-wrapper.json', configs[0])
-    launcher = base/'llama-server-wrapper.py'
-    backup = STATE/('launcher-before-three-'+str(time.time_ns())+'.py')
-    if launcher.is_file():
-        import shutil
-        shutil.copy2(launcher,backup)
-    # Stable application symlink survives application updates and archive reinstalls.
-    app = Path.home()/'.local/share/spark-link/current'
-    source = '#!/usr/bin/python3\nimport sys\nsys.path.insert(0, '+repr(str(app))+')\nfrom spark_link.multi import main\nmain()\n'
-    temporary = launcher.with_suffix('.new')
-    temporary.write_text(source)
-    temporary.chmod(0o700)
-    os.replace(temporary, launcher)
+    from .model_policy import install_gateway
+    install_gateway('multi')
     print('Настроены три Spark. На следующем запуске используются доступные устройства.', flush=True)
 
 
@@ -149,15 +162,15 @@ def main():
                     if size>available*0.8: raise SystemExit('Модель не помещается на одном Spark. Подключите второй Spark.')
         command = [str(binary),*args] if informational else model_command(binary,args,[],mode='first')
     else:
-        manager = FastloadManager(base)
         for config in peers:
-            result = manager.ensure(config)
+            result = manager_for(config).ensure(config)
             if result.state not in ('current','promoted'): raise SystemExit('Версии RPC ещё не согласованы.')
-        descriptor = os.open(base/'fastload/.selection.lock',os.O_CREAT|os.O_RDWR,0o600)
-        fcntl.flock(descriptor,fcntl.LOCK_SH)
-        os.set_inheritable(descriptor,True)
+        for selected_base in sorted({manager_base(config) for config in peers}):
+            descriptor = os.open(selected_base/'fastload/.selection.lock',os.O_CREAT|os.O_RDWR,0o600)
+            fcntl.flock(descriptor,fcntl.LOCK_SH)
+            os.set_inheritable(descriptor,True)
         for config in peers:
-            if not reachable(config) or manager.status(config)['state']!='current': raise SystemExit('Подключение изменилось. Повторите запуск модели.')
+            if not reachable(config) or manager_for(config).status(config)['state']!='current': raise SystemExit('Подключение изменилось. Повторите запуск модели.')
         binary = peers[0]['binary']
         endpoints = [c['rpc'] for c in peers]
         command = [str(binary),'--rpc',','.join(endpoints),'--list-devices'] if '--list-devices' in args else model_command(binary,args,endpoints,mode)

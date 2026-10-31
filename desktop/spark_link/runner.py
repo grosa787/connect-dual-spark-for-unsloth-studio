@@ -13,7 +13,8 @@ def main():
     parser.add_argument('--result', required=True)
     parser.add_argument('--plan')
     args = parser.parse_args()
-    command = [sys.executable, '-u', '-m', 'spark_link.jobs', args.action]
+    command = [sys.executable, '-u', '-m', 'spark_link.jobs', 'recover' if args.action=='recover-auto' else args.action]
+    if args.action=='recover-auto': command+=['--non-interactive']
     if args.plan: command += ['--plan', args.plan]
     code = 1
     try:

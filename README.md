@@ -4,7 +4,7 @@
 
 ## Native Spark Link application
 
-A separate native app with a 3D cable editor, installation and update controls is available. It does not require the installed CLI. [Desktop instructions](desktop/README.md) · [Download the app](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.0.0).
+A separate native app with a 3D cable editor, installation and update controls is available. It does not require the installed CLI. [Desktop instructions](desktop/README.md) · [Download the app](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.1.0).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash

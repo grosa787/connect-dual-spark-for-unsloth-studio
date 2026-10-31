@@ -10,10 +10,10 @@ import subprocess
 import sys
 import time
 
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 PACKAGES = ['python3-venv', 'libxcb-cursor0', 'libxkbcommon-x11-0', 'libxcb-icccm4', 'libxcb-image0',
             'libxcb-keysyms1', 'libxcb-render-util0', 'libgl1', 'libegl1', 'libopengl0', 'gnome-terminal',
-            'xdg-utils', 'openssh-client', 'rsync', 'curl', 'ethtool']
+            'xdg-utils', 'openssh-client', 'rsync', 'curl', 'ethtool', 'gnome-keyring']
 
 
 def desktop_entry(executable, icon):
@@ -55,7 +55,7 @@ def main():
         wheels = source/'wheels'
         command = [str(runtime/'bin/python'),'-m','pip','install','--disable-pip-version-check']
         if wheels.is_dir(): command += ['--no-index','--find-links',str(wheels)]
-        command += ['PySide6==6.8.3']
+        command += ['PySide6==6.8.3','SecretStorage==3.3.3']
         subprocess.run(command,check=True)
     subprocess.run([str(runtime/'bin/python'),'-c','from PySide6.QtQuick3D import QQuick3DGeometry; from PySide6.QtQml import QQmlApplicationEngine'],check=True)
     current = base/'current'
@@ -72,6 +72,17 @@ def main():
     entry = applications/'spark-link.desktop'
     entry.write_text(desktop_entry(executable,icon))
     entry.chmod(0o755)
+    import json
+    preferences=Path.home()/'.config/spark-link/preferences.json'
+    try: startup=json.loads(preferences.read_text()).get('startup',True)
+    except (OSError,ValueError): startup=True
+    if startup:
+        autostart=Path.home()/'.config/autostart/spark-link.desktop'
+        autostart.parent.mkdir(parents=True,exist_ok=True)
+        text=entry.read_text()
+        import re
+        autostart.write_text(re.sub(r'^Exec=(.*)$',r'Exec=\1 --background',text,flags=re.MULTILINE)+'X-GNOME-Autostart-enabled=true\n')
+    subprocess.run(['loginctl','enable-linger',str(os.environ.get('USER') or subprocess.check_output(['id','-un'],text=True).strip())],check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     try:
         desktop = Path(subprocess.check_output(['xdg-user-dir','DESKTOP'],text=True).strip())
     except (OSError,subprocess.SubprocessError): desktop=Path.home()/'Desktop'
@@ -92,6 +103,10 @@ def main():
         subprocess.run(['gio','set',str(terminal_shortcut),'metadata::trusted','true'],env=env,check=False)
     if shutil.which('update-desktop-database'):
         subprocess.run(['update-desktop-database',str(applications)],check=False)
+    guard=Path.home()/'.local/share/connect-dual-spark/llama-server-wrapper.py'
+    if guard.is_file():
+        env=os.environ.copy(); env['PYTHONPATH']=str(current)
+        subprocess.run([str(runtime/'bin/python'),'-c','from spark_link.model_policy import install_gateway; install_gateway()'],env=env,check=True)
     print('\nSpark Link установлен. Откройте меню приложений или ярлык «Spark Link» на рабочем столе.\n'+str(executable),flush=True)
     if not args.no_launch and (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
         subprocess.Popen([str(executable)],start_new_session=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)

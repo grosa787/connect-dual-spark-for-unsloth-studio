@@ -6,10 +6,18 @@ Item {
     id: scene
     property var nodes: []
     property var topology: ({nodes: [], cables: []})
+    property var orientations: []
     property int selectedNode: 0
     property bool editing: false
-    property real yaw: -12
+    property real yaw: 18
     signal selected(int node, int port)
+    function t(source) { let language=manager.language; return manager.translate(source) }
+    function verticalFor(index) { return scene.orientations[index]===true }
+    function anchorFor(index,port) {
+        let p=positionFor(index)
+        let anchor=manager.portAnchor(port,verticalFor(index))
+        return Qt.vector3d(p.x+anchor[0],p.y+anchor[1],p.z+anchor[2])
+    }
     function positionFor(index) {
         if (nodes.length === 3) return index === 0 ? Qt.vector3d(-155,0,50) : index === 1 ? Qt.vector3d(155,0,50) : Qt.vector3d(0,0,-200)
         return Qt.vector3d(index === 0 ? -140 : 140,0,0)
@@ -67,6 +75,7 @@ Item {
                     ports: scene.portsFor(index)
                     activePorts: scene.activeFor(index)
                     online: scene.nodes[index] ? scene.nodes[index].online : false
+                    vertical: scene.verticalFor(index)
                 }
             }
             Repeater3D {
@@ -82,8 +91,8 @@ Item {
                     property vector3d b: scene.positionFor(bi)
                     property bool linked: scene.activeFor(ai).indexOf(cable.a_port)>=0 && scene.activeFor(bi).indexOf(cable.b_port)>=0
                     geometry: CableGeometry {
-                        start: Qt.vector3d(cableModel.a.x+28+cableModel.cable.a_port*24, 0, cableModel.a.z+92)
-                        end: Qt.vector3d(cableModel.b.x+28+cableModel.cable.b_port*24, 0, cableModel.b.z+92)
+                        start: scene.anchorFor(cableModel.ai,cableModel.cable.a_port)
+                        end: scene.anchorFor(cableModel.bi,cableModel.cable.b_port)
                     }
                     materials: PrincipledMaterial { baseColor: cableModel.linked ? "#42692f" : "#8c9783"; roughness: 0.6 }
                     castsShadows: true
@@ -98,7 +107,7 @@ Item {
             property vector3d projected: {
                 let angle=scene.yaw; let w=scene.width; let h=scene.height
                 let p=scene.positionFor(index)
-                return view.mapFrom3DScene(rig.mapPositionToScene(Qt.vector3d(p.x,43,p.z)))
+                return view.mapFrom3DScene(rig.mapPositionToScene(Qt.vector3d(p.x,scene.verticalFor(index) ? 138 : 43,p.z)))
             }
             x: projected.x-width/2; y: projected.y-24
             width: nameLabel.implicitWidth+20; height: 27; radius: 13
@@ -118,11 +127,11 @@ Item {
             let hit=view.pick(mouse.x,mouse.y)
             if(hit.objectHit && hit.objectHit.deviceIndex !== undefined) scene.selected(hit.objectHit.deviceIndex, hit.objectHit.portIndex)
         }
-        onDoubleClicked: scene.yaw=-12
+        onDoubleClicked: scene.yaw=18
     }
     Rectangle {
         anchors { left: parent.left; bottom: parent.bottom; margins: 16 }
         width: hint.implicitWidth+24; height: 30; radius: 15; color: "#f6f8f1"
-        Text { id: hint; anchors.centerIn: parent; text: scene.editing ? "Нажмите на разъём · потяните сцену для поворота" : "3D-вид · потяните для поворота"; font.pixelSize: 12; color: "#53634f" }
+        Text { id: hint; anchors.centerIn: parent; text: scene.editing ? scene.t("Нажмите на разъём · потяните сцену для поворота") : scene.t("3D-вид · потяните для поворота"); font.pixelSize: 12; color: "#53634f" }
     }
 }

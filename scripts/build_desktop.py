@@ -7,14 +7,14 @@ import tarfile
 import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--wheels',required=True,type=Path)
     args=parser.parse_args()
     wheels=list(args.wheels.glob('*.whl'))
-    if len(wheels)!=4: raise SystemExit('Download the four PySide6 6.8.3 ARM64 wheels first.')
+    if len(wheels)!=9: raise SystemExit('Download the four Qt wheels and five SecretStorage dependency wheels first.')
     output=ROOT/'dist'
     output.mkdir(exist_ok=True)
     archive=output/f'Spark-Link-{VERSION}-arm64.tar.gz'

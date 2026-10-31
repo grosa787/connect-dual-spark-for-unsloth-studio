@@ -17,3 +17,11 @@ See https://www.qt.io/licensing/open-source-lgpl-obligations and the included GP
 The device visualization is original procedural geometry inspired by the DGX Spark chassis;
 it does not redistribute NVIDIA product photographs or CAD assets. NVIDIA and DGX Spark
 are trademarks of NVIDIA Corporation. This project is independent of NVIDIA and Unsloth.
+
+Encrypted keyring access bundles unmodified SecretStorage 3.3.3 (BSD), Jeepney 0.9.0 (MIT),
+cryptography 46.0.3 (Apache-2.0 OR BSD-3-Clause), cffi 2.0.0 (MIT), and pycparser 2.23 (BSD).
+Their upstream copyright/license notices, including cryptography's bundled native dependency
+notices, are retained inside the distributed wheels and installed runtime packages.
+Sources: https://github.com/mitya57/secretstorage, https://gitlab.com/takluyver/jeepney,
+https://github.com/pyca/cryptography, https://foss.heptapod.net/pypy/cffi,
+and https://github.com/eliben/pycparser. The corresponding version tags identify these releases.

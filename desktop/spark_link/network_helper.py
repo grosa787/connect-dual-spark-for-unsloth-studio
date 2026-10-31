@@ -47,9 +47,14 @@ def network_document(previous, plan):
 def atomic_bytes(path, content):
     with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
         stream.write(content)
+        stream.flush()
+        os.fsync(stream.fileno())
         name = stream.name
     os.chmod(name, 0o600)
     os.replace(name, path)
+    descriptor=os.open(path.parent,os.O_RDONLY)
+    try: os.fsync(descriptor)
+    finally: os.close(descriptor)
 
 
 def restore(backup):

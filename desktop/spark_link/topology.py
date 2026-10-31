@@ -1,11 +1,19 @@
 """Physical QSFP topology, independent of Qt and the installed CLI."""
 import copy
 import re
+import ipaddress
 
 INTERFACES = ('enp1s0f0np0', 'enp1s0f1np1', 'enP2p1s0f0np0', 'enP2p1s0f1np1')
 
 
 def safe_target(value):
+    if isinstance(value,str) and '@' in value and '%' in value:
+        user,address=value.split('@',1)
+        ip,interface=address.rsplit('%',1)
+        try:
+            if re.fullmatch(r'[a-z_][a-z0-9_-]*[$]?',user) and interface in INTERFACES and ipaddress.IPv6Address(ip).is_link_local:
+                return value
+        except ValueError: pass
     if not isinstance(value, str) or len(value) > 200 or not re.fullmatch(r'(?:[a-zA-Z0-9_][a-zA-Z0-9_.-]*@)?[a-zA-Z0-9][a-zA-Z0-9_.-]*', value):
         raise ValueError('Введите SSH-имя Spark без команд и пробелов.')
     return value
