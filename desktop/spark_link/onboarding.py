@@ -7,7 +7,8 @@ import re
 import shlex
 import subprocess
 import tempfile
-from .credentials import SecretPipe,Vault
+from .credentials import SecretPipe,Vault,credential_id
+from .identity import device_identity
 from .inventory import PROBE,probe
 from .topology import safe_target
 
@@ -60,7 +61,7 @@ def pair_device(candidate,username,password,vault=None,identity=None):
             raise RuntimeError('The connected device is not a recognized DGX Spark')
         credential=(vault or Vault())
         # Failure to persist securely is explicit. There is no plaintext fallback.
-        credential.set_record(info['machine_id'],{'password':password,'username':username,'management_ip':info.get('management_ip',''),'hostname':info['hostname'],'identity':str(identity)})
+        credential.set_record(credential_id(info),{'password':password,'username':username,'management_ip':info.get('management_ip',''),'hostname':info['hostname'],'identity':str(identity)})
         command='python3 -c '+shlex.quote(ENROLL)+' '+shlex.quote(base64.b64encode(public.encode()).decode())
         enrolled=subprocess.run(args+[command],env=env,stdin=subprocess.DEVNULL,capture_output=True,text=True,start_new_session=True,timeout=35)
         if enrolled.returncode: raise RuntimeError('Public-key enrollment failed')
@@ -68,7 +69,7 @@ def pair_device(candidate,username,password,vault=None,identity=None):
 
 def pinned_node(info,username,identity,candidate):
     fields=candidate['host_key'].split()
-    alias='spark-link-'+info['machine_id']
+    alias='spark-link-'+device_identity(info)
     known=Path.home()/'.ssh/known_hosts'
     line=alias+' '+fields[1]+' '+fields[2]
     previous=known.read_text() if known.exists() else ''
@@ -77,7 +78,7 @@ def pinned_node(info,username,identity,candidate):
         known.chmod(0o600)
     address=info.get('management_ip') or info['hostname']+'.local'
     node={'id':'pending','name':'Новый Spark','local':False,'ssh':username+'@'+address,'identity':str(identity),
-          'machine_id':info['machine_id'],'credential_id':info['machine_id'],'host_key_alias':alias,'host_key_id':candidate['key_id']}
+          'machine_id':info['machine_id'],'device_id':info.get('device_id',''),'credential_id':credential_id(info),'host_key_alias':alias,'host_key_id':candidate['key_id']}
     verified=probe(node)
     if not verified.get('online'): raise RuntimeError('The authorized Spark could not be reached on its management address')
     return verified

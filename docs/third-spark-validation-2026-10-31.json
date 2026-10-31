@@ -1,0 +1,176 @@
+{
+  "load_result": {
+    "status": "loaded",
+    "message": null,
+    "max_seq_length": null,
+    "parallel_slots": 4,
+    "backend": null,
+    "context_length": 1048576
+  },
+  "placement": {
+    "pid": 1385109,
+    "split": "28,36,36",
+    "devices": "CUDA0,RPC0,RPC1",
+    "context": "1048576",
+    "load_seconds": 105.6
+  },
+  "allocated_mib": {
+    "weights": {
+      "CUDA0": 46042.78,
+      "RPC0": 56694.83,
+      "RPC1": 50618.24
+    },
+    "kv": {
+      "CUDA0": 7879.0,
+      "RPC0": 10544.0,
+      "RPC1": 9226.0
+    }
+  },
+  "chat_result": {
+    "content": "4",
+    "usage": {
+      "prompt_tokens": 29,
+      "completion_tokens": 2,
+      "total_tokens": 31,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "audio_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "audio_tokens": 0,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0
+      }
+    }
+  },
+  "vision_result": {
+    "content": "Red",
+    "usage": {
+      "prompt_tokens": 144,
+      "completion_tokens": 2,
+      "total_tokens": 146,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "audio_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "audio_tokens": 0,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0
+      }
+    }
+  },
+  "unload_result": {
+    "status": "unloaded",
+    "model": "unsloth/DeepSeek-V4-Flash-Vision-Exp-GGUF"
+  },
+  "date": "2026-10-31",
+  "network": [
+    {
+      "from": "head",
+      "to": "worker2",
+      "iface": "enp1s0f0np0",
+      "target": "10.100.32.2",
+      "ip_bytes": 9000,
+      "loss": 0
+    },
+    {
+      "from": "worker2",
+      "to": "head",
+      "iface": "enp1s0f0np0",
+      "target": "10.100.32.1",
+      "ip_bytes": 9000,
+      "loss": 0
+    },
+    {
+      "from": "head",
+      "to": "worker2",
+      "iface": "enP2p1s0f0np0",
+      "target": "10.100.33.2",
+      "ip_bytes": 9000,
+      "loss": 0
+    },
+    {
+      "from": "worker2",
+      "to": "head",
+      "iface": "enP2p1s0f0np0",
+      "target": "10.100.33.1",
+      "ip_bytes": 9000,
+      "loss": 0
+    },
+    {
+      "from": "head",
+      "to": "worker3",
+      "iface": "enp1s0f1np1",
+      "target": "10.100.34.2",
+      "ip_bytes": 9000,
+      "loss": 0
+    },
+    {
+      "from": "worker3",
+      "to": "head",
+      "iface": "enp1s0f1np1",
+      "target": "10.100.34.1",
+      "ip_bytes": 9000,
+      "loss": 0
+    },
+    {
+      "from": "head",
+      "to": "worker3",
+      "iface": "enP2p1s0f1np1",
+      "target": "10.100.35.2",
+      "ip_bytes": 9000,
+      "loss": 0
+    },
+    {
+      "from": "worker3",
+      "to": "head",
+      "iface": "enP2p1s0f1np1",
+      "target": "10.100.35.1",
+      "ip_bytes": 9000,
+      "loss": 0
+    },
+    {
+      "from": "worker2",
+      "to": "worker3",
+      "iface": "enp1s0f1np1",
+      "target": "10.100.36.2",
+      "ip_bytes": 9000,
+      "loss": 0
+    },
+    {
+      "from": "worker3",
+      "to": "worker2",
+      "iface": "enp1s0f0np0",
+      "target": "10.100.36.1",
+      "ip_bytes": 9000,
+      "loss": 0
+    },
+    {
+      "from": "worker2",
+      "to": "worker3",
+      "iface": "enP2p1s0f1np1",
+      "target": "10.100.37.2",
+      "ip_bytes": 9000,
+      "loss": 0
+    },
+    {
+      "from": "worker3",
+      "to": "worker2",
+      "iface": "enP2p1s0f0np0",
+      "target": "10.100.37.1",
+      "ip_bytes": 9000,
+      "loss": 0
+    }
+  ],
+  "gpu_count": 3,
+  "os_machine_id_collision_detected": true,
+  "unique_hardware_ids_verified": true,
+  "test_counts": {
+    "cli": 138,
+    "desktop": 58
+  },
+  "rpc_restart_recovery_verified": true
+}

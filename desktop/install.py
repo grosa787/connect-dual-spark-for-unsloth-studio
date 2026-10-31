@@ -10,10 +10,10 @@ import subprocess
 import sys
 import time
 
-VERSION = '1.3.0'
+VERSION = '1.4.0'
 PACKAGES = ['python3-venv', 'libxcb-cursor0', 'libxkbcommon-x11-0', 'libxcb-icccm4', 'libxcb-image0',
             'libxcb-keysyms1', 'libxcb-render-util0', 'libgl1', 'libegl1', 'libopengl0', 'gnome-terminal',
-            'xdg-utils', 'openssh-client', 'rsync', 'curl', 'ethtool', 'gnome-keyring']
+            'xdg-utils', 'openssh-client', 'rsync', 'curl', 'ethtool', 'gnome-keyring', 'avahi-utils', 'lldpd']
 
 
 def desktop_entry(executable, icon):

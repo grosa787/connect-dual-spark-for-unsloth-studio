@@ -54,3 +54,10 @@ class TriangleEditingTests(unittest.TestCase):
         value=default_topology(3); value['cables'].pop()
         with self.assertRaisesRegex(ValueError,'треугольник'):
             validate_topology(value,require_targets=False)
+    def test_addresses_alone_do_not_prove_the_physical_triangle(self):
+        from spark_link.topology import physical_links_ready
+        topology=default_topology(3)
+        nodes=[{'id':n['id'],'interfaces':{'enp1s0f0np0':{'carrier':True},'enp1s0f1np1':{'carrier':True}}} for n in topology['nodes']]
+        self.assertTrue(physical_links_ready(topology,nodes))
+        nodes[0]['interfaces']['enp1s0f1np1']['carrier']=False
+        self.assertFalse(physical_links_ready(topology,nodes))

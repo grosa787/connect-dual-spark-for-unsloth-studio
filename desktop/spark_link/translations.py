@@ -1,6 +1,8 @@
 """Runtime UI translations. Unmodified command output stays in its original language."""
 # Russian source text maps to English, German and Spanish, in that order.
 MESSAGES={
+ 'Треугольник использует три кабеля. Номера портов сохраняются при повороте корпуса.':('The triangle uses three cables. Physical port numbers stay the same when cases rotate.','Das Dreieck nutzt drei Kabel. Die physischen Portnummern bleiben beim Drehen erhalten.','El triángulo usa tres cables. Los números físicos de puerto se mantienen al girar las carcasas.'),
+ 'Не все кабели подключены':('Some cables are disconnected','Nicht alle Kabel sind verbunden','Faltan conexiones de cable'),
  'Кабели':('Cables','Kabel','Cables'),
  'Треугольник: 1 ↔ 2, 1 ↔ 3, 2 ↔ 3. У каждого Spark заняты оба порта.':('Triangle: 1 ↔ 2, 1 ↔ 3, 2 ↔ 3. Both ports on every Spark are used.','Dreieck: 1 ↔ 2, 1 ↔ 3, 2 ↔ 3. Beide Ports jedes Spark sind belegt.','Triángulo: 1 ↔ 2, 1 ↔ 3, 2 ↔ 3. Se usan ambos puertos de cada Spark.'),
  'При выборе занятого порта кабели этого Spark меняются портами в схеме.':('Choosing an occupied port swaps this Spark’s two cable endpoints in the layout.','Bei einem belegten Port werden die beiden Kabelenden dieses Spark im Plan getauscht.','Al elegir un puerto ocupado, los dos cables de ese Spark intercambian sus puertos en el esquema.'),

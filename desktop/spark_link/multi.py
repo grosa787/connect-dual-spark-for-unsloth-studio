@@ -111,10 +111,10 @@ def setup_multi(topology, nodes):
         config['manager_base']=str(pair_base)
         if not (base/'llama-server-wrapper.py').is_file():
             installer.install_llama_guard(allow_pending=True)
-        check = 'command -v cmake && command -v rsync && dpkg-query -W libibverbs-dev librdmacm-dev >/dev/null 2>&1'
+        check = 'command -v cmake && command -v rsync && command -v avahi-browse && command -v lldpcli && dpkg-query -W libibverbs-dev librdmacm-dev >/dev/null 2>&1'
         try: installer._worker(check)
         except Exception:
-            privileged(node,['bash','-c','apt-get update && apt-get install -y cmake build-essential rsync libibverbs-dev librdmacm-dev'])
+            privileged(node,['bash','-c','apt-get update && apt-get install -y cmake build-essential rsync libibverbs-dev librdmacm-dev avahi-utils lldpd'])
         result = manager_for(config).ensure(config)
         if result.state not in ('current','promoted'):
             raise RuntimeError('Сборка RPC отложена: выгрузите активную модель.')

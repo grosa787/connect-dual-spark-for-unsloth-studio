@@ -6,6 +6,8 @@ An independently installable Qt Quick / Qt Quick 3D app for Ubuntu 24.04+ ARM64 
 
 [Verified backend update: Unsloth 2026.10.11, llama.cpp b11985, Q8 text and vision on two Sparks](../docs/runtime-update-2026-10-31.md).
 
+Spark Link 1.4.0 adds reliable LAN/LLDP discovery and GPU-based identities. The real three-Spark Q8/1M-context text/vision and worker restart checks passed. [Enrollment and validation report](../docs/third-spark-2026-10-31.md).
+
 Spark Link 1.3.0 refines the triangle cabling editor, preserves the existing pair’s ports when adding a third device and adds connector detail. [Triangle release notes](../docs/triangle-and-detail-2026-10-31.md).
 
 Spark Link 1.2.0 adds a dimensioned DGX Spark illustration with porous metal faces, recessed I/O, rounded front grips and rotating cable anchors. Camera presets, zoom, matching inputs and clearer navigation are included. It also includes the shared asynchronous RPC loader and safely updates the independent fastload helpers while retaining custom launch rules. [Performance and Mistral capacity report](../docs/startup-and-mistral-2026-10-31.md).
@@ -38,13 +40,13 @@ The installer downloads and checks the release archive, extracts it, creates an 
 For a manually downloaded self-extracting installer:
 
 ```bash
-bash "$HOME/Downloads/Spark-Link-1.3.0-arm64.run"
+bash "$HOME/Downloads/Spark-Link-1.4.0-arm64.run"
 ```
 
 For a manually downloaded tar.gz archive:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash -s -- --archive "$HOME/Downloads/Spark-Link-1.3.0-arm64.tar.gz"
+curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash -s -- --archive "$HOME/Downloads/Spark-Link-1.4.0-arm64.tar.gz"
 ```
 
 Alternatively extract the archive in a file manager, open a terminal inside **Spark-Link** and run `bash ./install.sh`. Both formats install the same native app. No manual chmod or `.deb` extraction is required. These commands target Ubuntu ARM64 Spark devices, not macOS/Windows or arbitrary Linux architectures. Qt wheels are included; an extracted release installs without downloading Python packages when the required system libraries are already present.
@@ -70,7 +72,7 @@ Account passwords use the encrypted GNOME Secret Service keyring, with no plaint
 
 To relocate a cable, unload all models, move the cable, select the actual connector at both endpoints, then apply the connection. Physical port 0 is nearest RJ45; port 1 is the outer QSFP connector when viewed from the back. A rotated enclosure can make these appear upper/lower. The app configures both logical rails for each physical port. It only edits ConnectX-7 configuration and preserves the management interface. Active models, missing SSH hosts, occupied ports, or missing physical carrier block changes. Netplan backups and transaction rollback are included.
 
-The three-device path builds compatible worker runtimes and uses the available configured workers at the next model launch. Disconnecting the third device while idle permits the remaining pair; it does not migrate an already running model. **Three-device mode is experimental:** topology/launcher behavior is covered by tests, but only the available two-device hardware pair was verified. The third device must be qualified after it is connected. The existing two-device custom launcher and model placement are preserved until three-device runtime setup is explicitly performed.
+The three-device path builds compatible worker runtimes and uses the available configured workers at the next model launch. Disconnecting the third device while idle permits the remaining pair; it does not migrate an already running model. Three-device inference has now been verified on the available real triangle with Q8, configured 1M context, F16 KV, text and vision. See the hardware-qualified limits in the 1.4 report. The existing two-device custom launcher and model placement are preserved until three-device runtime setup is explicitly performed.
 
 ## CLI-only installation
 

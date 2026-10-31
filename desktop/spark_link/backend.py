@@ -9,7 +9,7 @@ from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from .inventory import scan, discover_worker
 from .state import CONFIG, STATE, read_json, write_json
-from .topology import default_topology, validate_topology, select_port, resize_topology
+from .topology import default_topology, validate_topology, select_port, resize_topology, physical_links_ready
 from .preferences import ViewPreferences, LANGUAGES, port_anchor
 from .translations import translate
 from . import __version__
@@ -113,6 +113,8 @@ class Backend(QObject):
             from .jobs import plan_matches
             from .topology import compile_topology
             plans = compile_topology(self._topology)
+            if online==len(self._nodes) and not physical_links_ready(self._topology,self._nodes):
+                return self.translate('Не все кабели подключены')
             if online == len(self._nodes) and all(plan_matches(n, plans[n['id']]) for n in self._nodes):
                 return self.translate('Spark соединены')
             if online == len(self._nodes): return self.translate('Схема требует применения')

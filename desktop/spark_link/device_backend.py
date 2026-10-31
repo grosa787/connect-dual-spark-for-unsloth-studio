@@ -10,6 +10,7 @@ from .inventory import scan
 from .onboarding import pair_device,trusted_node
 from .state import CONFIG,read_json,write_json
 from .topology import INTERFACES,default_topology
+from .identity import same_device,enrollment_slot
 
 
 class DeviceManager(QObject):
@@ -108,10 +109,10 @@ class DeviceManager(QObject):
             self._message='Не удалось подключить устройство: '+value['error']
         elif 'paired' in value:
             node=value['paired']
-            if any(n.get('machine_id')==node.get('machine_id') for n in self.manager._topology['nodes'] if n.get('machine_id')):
+            if any(same_device(n,node) for n in self.manager._nodes):
                 self._message='Этот Spark уже добавлен.'; self.changed.emit(); return
             topology=copy.deepcopy(self.manager._topology)
-            slot=next((i for i,n in enumerate(topology['nodes'][1:],1) if not n.get('ssh')),len(topology['nodes']))
+            slot=enrollment_slot(topology['nodes'],self.manager._nodes,node)
             if slot>=3:
                 self._message='Поддерживается не больше трёх Spark.'; self.changed.emit(); return
             node.update({'id':'worker'+str(slot+1),'name':'Второй Spark' if slot==1 else 'Третий Spark','local':False})

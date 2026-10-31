@@ -10,7 +10,7 @@ import sys
 from .topology import INTERFACES, safe_target
 
 PROBE = r'''
-import json, os, pathlib, platform, shutil, socket, subprocess
+import hashlib, json, os, pathlib, platform, shutil, socket, subprocess
 def run(args):
     try:
         return subprocess.run(args, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=6).stdout.strip()
@@ -39,9 +39,23 @@ disk = shutil.disk_usage(pathlib.Path.home())
 defaults=json.loads(run(['ip','-j','route','show','default']) or '[]')
 management_iface=defaults[0].get('dev','') if defaults else ''
 management_ip=next((a['local'] for i in addresses if i['ifname']==management_iface for a in i.get('addr_info',[]) if a['family']=='inet'),'')
+management_prefixlen=next((a['prefixlen'] for i in addresses if i['ifname']==management_iface for a in i.get('addr_info',[]) if a['family']=='inet'),24)
+gpu_uuid=run(['nvidia-smi','--query-gpu=uuid','--format=csv,noheader'])
+device_id=hashlib.sha256(('dgx-spark:'+gpu_uuid).encode()).hexdigest() if gpu_uuid.startswith('GPU-') else ''
+neighbors=json.loads(run(['ip','-j','neigh','show']) or '[]')
+try:
+    lldp=json.loads(run(['lldpcli','-f','json','show','neighbors']) or '{}').get('lldp',{}).get('interface',[])
+    if isinstance(lldp,dict): lldp=[lldp]
+    for row in lldp:
+        for iface,detail in row.items():
+            port=detail.get('port',{}).get('id',{})
+            if iface in interfaces and interfaces[iface]['carrier'] and port.get('type')=='mac':
+                neighbors.append({'dev':iface,'lladdr':port['value'],'state':['LLDP']})
+except (ValueError,TypeError,KeyError): pass
 print(json.dumps({'hostname': socket.gethostname(), 'user': os.environ.get('USER', ''), 'home': str(pathlib.Path.home()),
-    'machine_id': pathlib.Path('/etc/machine-id').read_text().strip(), 'management_ip': management_ip,
-    'neighbors': json.loads(run(['ip','-j','neigh','show']) or '[]'),
+    'device_id':device_id,
+    'machine_id': pathlib.Path('/etc/machine-id').read_text().strip(), 'management_ip': management_ip,'management_prefixlen':management_prefixlen,
+    'neighbors': neighbors,
     'arch': platform.machine(), 'gpu': run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader']),
     'memory_total': mem['MemTotal'], 'memory_available': mem['MemAvailable'], 'memory_used': mem['MemTotal']-mem['MemAvailable'],
     'disk_available': disk.free, 'interfaces': interfaces, 'model_active': bool(run(['pgrep', '-x', 'llama-server'])),
@@ -89,11 +103,15 @@ def probe(node):
         if result.returncode:
             raise RuntimeError(result.stderr.strip()[-350:] or 'Spark не ответил на диагностику.')
         data = json.loads(result.stdout)
+        if node.get('device_id') and data.get('device_id')!=node['device_id']:
+            raise RuntimeError('Device hardware identity changed; reconnect with explicit authorization.')
         if node.get('machine_id') and data.get('machine_id')!=node['machine_id']:
             raise RuntimeError('Device identity changed; reconnect with explicit authorization.')
         if 'GB10' not in data['gpu']:
             raise RuntimeError('На устройстве не обнаружена GPU GB10.')
-        return {**node, **data, 'online': True, 'error': ''}
+        # Keep previously enrolled secrets under their existing keyring identity.
+        credential=node.get('credential_id') or node.get('machine_id') or data.get('device_id') or data['machine_id']
+        return {**node, **data, 'credential_id':credential, 'online': True, 'error': ''}
     except Exception as exc:
         return {**node, 'online': False, 'error': str(exc)}
 

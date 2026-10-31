@@ -11,7 +11,7 @@ import threading
 class VaultUnavailable(RuntimeError): pass
 
 def credential_id(node):
-    return node.get('machine_id') or hashlib.sha256((node.get('ssh') or 'local').encode()).hexdigest()
+    return node.get('credential_id') or node.get('device_id') or node.get('machine_id') or hashlib.sha256((node.get('ssh') or 'local').encode()).hexdigest()
 
 class Vault:
     def __init__(self,connection_factory=None):

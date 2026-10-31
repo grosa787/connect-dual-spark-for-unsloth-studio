@@ -4,7 +4,7 @@
 
 For three Sparks, the supported physical plan is a complete triangle: **1 ↔ 2, 1 ↔ 3 and 2 ↔ 3**, three cables total, using both QSFP ports on every device. A two-edge chain or duplicated physical port is rejected. The actual installation still contains two devices; three-device inference and onboarding must be qualified when the third Spark arrives.
 
-![Three-device triangle preview; the third Spark is not connected](images/en/triangle.png)
+![Three-device triangle preview; the third Spark is not connected](images/en/triangle-preview-1.3.png)
 
 | Cable | Default endpoints |
 | --- | --- |

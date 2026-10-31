@@ -2,6 +2,10 @@
 
 # Spark Link verification
 
+## Spark Link 1.4.0: real three-device qualification
+
+138 CLI and 58 desktop tests; real three-GPU Q8/F16 KV at configured 1048576 context; text and vision; all 12 directed jumbo-packet checks; third-worker restart and automatic return from two to three devices; six-tab/four-language native UI. [Evidence and limitations](../docs/third-spark-2026-10-31.md).
+
 ## Spark Link 1.3.0 verification
 
 138 CLI tests and all 49 desktop checks passed across the isolated/system runtimes. Triangle editing, preserved pair ports, three cable tabs, camera fit/reset, all four languages, compact layouts and hide/show rendering passed on real ARM64 Qt. [Triangle/detail report](../docs/triangle-and-detail-2026-10-31.md).

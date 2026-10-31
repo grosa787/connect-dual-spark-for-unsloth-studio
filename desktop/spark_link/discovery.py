@@ -10,6 +10,7 @@ import re
 import socket
 import subprocess
 from .inventory import probe,identity_file,ssh_argv,node_ssh
+from .identity import same_device
 from .topology import INTERFACES,default_topology,validate_topology
 
 def physical_port(interface):
@@ -21,6 +22,7 @@ def infer_topology(nodes):
     edges={}
     for node in nodes:
         for neighbor in node.get('neighbors',[]):
+            if node.get('interfaces',{}).get(neighbor.get('dev'),{}).get('carrier') is False: continue
             port=physical_port(neighbor.get('dev'))
             other=macs.get(neighbor.get('lladdr','').lower())
             if port is None or not other or other[0]==node['id']: continue
@@ -30,7 +32,7 @@ def infer_topology(nodes):
             if key in edges and edges[key]!=edge: return None
             edges[key]=edge
     if len(edges)!=(1 if len(nodes)==2 else 3): return None
-    topology={'version':1,'nodes':[{k:v for k,v in node.items() if k in ('id','name','ssh','local','identity','machine_id','credential_id','host_key_alias','host_key_id','hostname','user','home','management_ip')} for node in nodes],'cables':list(edges.values())}
+    topology={'version':1,'nodes':[{k:v for k,v in node.items() if k in ('id','name','ssh','local','identity','machine_id','device_id','credential_id','host_key_alias','host_key_id','hostname','user','home','management_ip')} for node in nodes],'cables':list(edges.values())}
     try: return validate_topology(topology)
     except ValueError: return None
 
@@ -58,20 +60,69 @@ def filter_known_candidates(candidates,nodes):
     """Reconcile a delayed discovery result with the latest verified inventory."""
     online=[n for n in nodes if n.get('online')]
     macs={v['mac'].lower() for n in online for v in n.get('interfaces',{}).values() if v.get('mac')}
-    ids={n['machine_id'] for n in online if n.get('machine_id')}
     keys={n['host_key_id'] for n in online if n.get('host_key_id')}
     return [c for c in candidates if c.get('existing_id') or not (
-        c.get('mac','').lower() in macs or c.get('device',{}).get('machine_id') in ids or c.get('id') in keys)]
+        c.get('mac','').lower() in macs or any(same_device(c.get('device',{}),node) for node in online) or c.get('id') in keys)]
+
+def advertised_names(text):
+    names=set()
+    for line in text.splitlines():
+        fields=line.split(';')
+        if len(fields)<6 or fields[0] not in ('+','='): continue
+        label=re.sub(r'\\([0-9]{3})',lambda m:chr(int(m[1])),fields[3])
+        match=re.fullmatch(r'(spark-[a-zA-Z0-9-]{4,}) SSH',label)
+        if match: names.add(match[1].lower()+'.local')
+    return names
+
+
+def bootstrap_candidates(nodes):
+    """Passive SSH-service advertisements and LLDP, including other workers.
+
+    A freshly installed Spark may have no IP address on ConnectX at all. Its
+    advertised management name is still resolvable over the ordinary LAN.
+    These are proposals only: onboarding verifies host key, GB10 and hardware ID.
+    """
+    names=set()
+    try:
+        result=subprocess.run(['avahi-browse','-pt','_ssh._tcp'],text=True,capture_output=True,timeout=6)
+        names.update(advertised_names(result.stdout))
+    except (OSError,subprocess.SubprocessError): pass
+    def lldp_names(node):
+        if not node.get('online'): return set()
+        command=['lldpcli','-f','json','show','neighbors']
+        try:
+            argv=command if node.get('local') else node_ssh(node)+['lldpcli -f json show neighbors']
+            result=subprocess.run(argv,text=True,capture_output=True,timeout=8)
+            rows=json.loads(result.stdout).get('lldp',{}).get('interface',[])
+            if isinstance(rows,dict): rows=[rows]
+            return {name.lower()+'.local' for row in rows for iface,data in row.items() if iface in INTERFACES
+                    for name in data.get('chassis',{}) if re.fullmatch(r'spark-[a-zA-Z0-9-]{4,}',name)
+                    and name!=node.get('hostname')}
+        except (OSError,ValueError,TypeError,AttributeError,subprocess.SubprocessError): return set()
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        for found in pool.map(lldp_names,nodes): names.update(found)
+    local_names={n.get('hostname','').lower()+'.local' for n in nodes if n.get('online')}
+    result=[]
+    head=next((n for n in nodes if n.get('local')), {})
+    try: management=ipaddress.ip_network(str(head['management_ip'])+'/'+str(head.get('management_prefixlen',24)),strict=False)
+    except (KeyError,ValueError): management=None
+    for name in sorted(names-local_names)[:12]:
+        try:
+            addresses=socket.getaddrinfo(name,22,socket.AF_INET,socket.SOCK_STREAM)
+            candidates={ip[4][0] for ip in addresses if ipaddress.ip_address(ip[4][0]).is_private and not ipaddress.ip_address(ip[4][0]).is_loopback and not ipaddress.ip_address(ip[4][0]).is_link_local}
+            for address in sorted(candidates,key=lambda ip:(not (management and ipaddress.ip_address(ip) in management),ip))[:3]:
+                result.append({'address':address,'hostname':name,'source':'mdns-lldp'})
+        except (OSError,StopIteration): pass
+    return result
+
 
 def scan_new_devices(topology,known_nodes):
     head=next((n for n in known_nodes if n.get('local') and n.get('online')),None)
     if not head: return []
+    addresses={c['address']:c for c in bootstrap_candidates(known_nodes)}
     warm_neighbors(head)
     refreshed=probe(topology['nodes'][0])
-    if not refreshed.get('online'): return []
     known_macs={info.get('mac','').lower() for node in known_nodes if node.get('online') for info in node.get('interfaces',{}).values() if info.get('mac')}
-    known_ids={node.get('machine_id') for node in known_nodes if node.get('machine_id')}
-    addresses={}
     for neighbor in refreshed.get('neighbors',[]):
         iface=neighbor.get('dev','')
         if iface not in INTERFACES or not neighbor.get('lladdr') or neighbor['lladdr'].lower() in known_macs: continue
@@ -83,20 +134,19 @@ def scan_new_devices(topology,known_nodes):
             else:
                 if not address.is_private: continue
                 target=str(address)
-            addresses[target]={'address':target,'interface':iface,'mac':neighbor['lladdr']}
+            addresses.setdefault(target,{'address':target,'interface':iface,'mac':neighbor['lladdr'],'source':'connectx'})
         except ValueError: continue
     def inspect(candidate):
         key=fingerprint(candidate['address'])
         if not key: return None
         previous=next((n for n in known_nodes if n.get('host_key_id')==key['key_id']),None)
-        # Already trusted SSH identities can be recognized without asking for credentials.
         target=(os.environ.get('USER','spark')+'@' if '%' in candidate['address'] else '')+candidate['address']
         if previous:
             username=previous.get('user') or previous['ssh'].split('@',1)[0]
             target=username+'@'+candidate['address']
         data=probe({**(previous or {}),'id':'pending','name':'Новый Spark','ssh':target,'local':False})
-        if data.get('online') and data.get('machine_id') in known_ids:
-            known=next(n for n in known_nodes if n.get('machine_id')==data['machine_id'])
+        known=next((n for n in known_nodes if data.get('online') and same_device(n,data)),None)
+        if known:
             if known.get('online'): return None
             data.update({'id':known['id'],'name':known['name'],'ssh':data['user']+'@'+(data.get('management_ip') or data['hostname']+'.local')})
             return {**candidate,**key,'id':key['key_id'],'existing_id':known['id'],'device':data,'authorized':True}

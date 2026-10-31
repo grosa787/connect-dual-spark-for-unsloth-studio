@@ -263,7 +263,7 @@ ApplicationWindow {
                         Rectangle { Layout.fillWidth: true; height: 1; color: "#e3e9de" }
                         Text { text: window.t("Как переключить порт"); font.pixelSize: 14; font.weight: Font.DemiBold; color: "#36532f" }
                         Text { Layout.fillWidth: true; text: window.t("Выгрузите модели. Переставьте кабель. Выберите разъёмы на схеме и примените подключение. Следующий запуск использует новую сеть."); wrapMode: Text.WordWrap; font.pixelSize: 13; color: "#63755c"; lineHeight: 1.25 }
-                        Text { Layout.fillWidth: true; text: manager.topology.nodes.length===3 ? window.t("Третий Spark добавляется через поиск устройств. Проверка на трёх физических Spark ещё предстоит.") : window.t("Адреса кластера сохраняются при переносе кабеля на другой порт."); wrapMode: Text.WordWrap; font.pixelSize: 12; color: "#71816a" }
+                        Text { Layout.fillWidth: true; text: manager.topology.nodes.length===3 ? window.t("Треугольник использует три кабеля. Номера портов сохраняются при повороте корпуса.") : window.t("Адреса кластера сохраняются при переносе кабеля на другой порт."); wrapMode: Text.WordWrap; font.pixelSize: 12; color: "#71816a" }
                         Item { Layout.fillHeight: true }
                         ActionButton { Layout.fillWidth: true; text: window.t("Проверить устройства"); enabled: !manager.busy; onClicked: { manager.refresh(); devices.search() } }
                         ActionButton { visible:devices.pending; Layout.fillWidth:true; text:window.t("Повторить настройку"); enabled:!manager.busy; onClicked:devices.retrySetup() }

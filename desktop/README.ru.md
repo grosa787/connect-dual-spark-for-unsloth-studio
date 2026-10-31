@@ -6,6 +6,8 @@
 
 [Проверенное обновление среды: Unsloth 2026.10.11, llama.cpp b11985, текст и изображения на Q8 через два Spark](../docs/runtime-update-2026-10-31.ru.md).
 
+Spark Link 1.4.0 добавляет поиск через LAN/LLDP и аппаратные ID по GPU. Пройдены настоящий запуск Q8/1M с текстом/изображением на трёх Spark и перезапуск RPC. [Отчёт о добавлении и проверках](../docs/third-spark-2026-10-31.ru.md).
+
 Spark Link 1.3.0 доработал редактор треугольника, сохраняет порты первой пары при добавлении третьего устройства и добавляет детали разъёмов. [Описание обновления](../docs/triangle-and-detail-2026-10-31.ru.md).
 
 Spark Link 1.2.0 получил новую модель DGX Spark с реальными пропорциями корпуса, пористыми панелями, утопленными разъёмами, передними ручками и кабелями, которые поворачиваются вместе с корпусом. Добавлены ракурсы камеры, масштаб и единый стиль полей ввода. Версия также включает общее ускорение RPC-загрузки и безопасно обновляет независимые управляющие файлы fastload, сохраняя пользовательские правила запуска. [Отчёт о скорости и пределе памяти Mistral](../docs/startup-and-mistral-2026-10-31.ru.md).
@@ -39,18 +41,18 @@ curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-uns
 
 ## Скачали файл вручную
 
-Самый простой вариант — [Spark-Link-1.3.0-arm64.run](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/download/desktop-v1.3.0/Spark-Link-1.3.0-arm64.run). После скачивания выполните:
+Самый простой вариант — [Spark-Link-1.4.0-arm64.run](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/download/desktop-v1.4.0/Spark-Link-1.4.0-arm64.run). После скачивания выполните:
 
 ```bash
-bash "$HOME/Downloads/Spark-Link-1.3.0-arm64.run"
+bash "$HOME/Downloads/Spark-Link-1.4.0-arm64.run"
 ```
 
 Если браузер сохраняет в «Загрузки», замените `Downloads` на фактический каталог. `chmod` и ручная распаковка не нужны. Установщик сам добавит приложение в меню.
 
-Для отдельно скачанного [tar.gz-архива](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/download/desktop-v1.3.0/Spark-Link-1.3.0-arm64.tar.gz) используйте:
+Для отдельно скачанного [tar.gz-архива](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/download/desktop-v1.4.0/Spark-Link-1.4.0-arm64.tar.gz) используйте:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash -s -- --archive "$HOME/Downloads/Spark-Link-1.3.0-arm64.tar.gz"
+curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash -s -- --archive "$HOME/Downloads/Spark-Link-1.4.0-arm64.tar.gz"
 ```
 
 Или распакуйте архив обычным архиватором, откройте терминал в полученной папке **Spark-Link** и выполните:
@@ -89,7 +91,7 @@ bash ./install.sh
 
 Для трёх устройств применяется отдельный launcher приложения. Он использует доступные настроенные workers на момент запуска модели. Если третий Spark отключён при выгруженных моделях, следующий запуск работает на оставшейся паре. Без workers разрешается локальный запуск модели, которая помещается в память первого Spark. Перераспределения уже запущенной модели при выдёргивании кабеля нет.
 
-**Трёхузловой режим экспериментальный:** топология, команды запуска и переход к двум workers покрыты тестами; физически проверена только имеющаяся пара Spark. Полный запуск на трёх устройствах требует проверки после подключения третьего. Не отображается фиктивный «подключённый» третий Spark.
+Режим трёх устройств проверен на настоящем треугольнике: Q8, настроенный контекст 1M, F16 KV, текст и изображение. Проверены перезапуск worker и возврат к трём устройствам. Ограничения проверки перечислены в отчёте 1.4; неподключённые устройства не считаются готовыми.
 
 ## Память модели
 

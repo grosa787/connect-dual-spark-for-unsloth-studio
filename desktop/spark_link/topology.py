@@ -117,3 +117,10 @@ def compile_topology(value):
                 iface = f'{prefix}{port}np{port}'
                 plans[node]['interfaces'][iface] = [f'10.100.{subnet + rail}.{suffix}/24']
     return plans
+
+
+def physical_links_ready(topology,nodes):
+    lookup={n['id']:n for n in nodes}
+    return all(lookup.get(cable[side],{}).get('interfaces',{}).get(
+        'enp1s0f'+str(cable[side+'_port'])+'np'+str(cable[side+'_port']),{}).get('carrier') is True
+        for cable in topology['cables'] for side in ('a','b'))

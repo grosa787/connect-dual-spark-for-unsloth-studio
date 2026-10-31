@@ -4,7 +4,9 @@
 
 ## Native Spark Link application
 
-A separate native app with a 3D cable editor, installation and update controls is available. It does not require the installed CLI. [Desktop instructions](desktop/README.md) · [Download the app](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.3.0).
+A separate native app with a 3D cable editor, installation and update controls is available. It does not require the installed CLI. [Desktop instructions](desktop/README.md) · [Download the app](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.4.0).
+
+**Spark Link 1.4.0:** real three-GPU Q8/1M-context text and vision validation, passive LAN/LLDP discovery, cloned-OS hardware identity fix and verified RPC recovery. [Third Spark report](docs/third-spark-2026-10-31.md).
 
 **Spark Link 1.3.0:** complete three-cable triangle, preserved pair port choices, atomic endpoint swaps, compact cable controls and more hardware detail. [Triangle update](docs/triangle-and-detail-2026-10-31.md).
 
