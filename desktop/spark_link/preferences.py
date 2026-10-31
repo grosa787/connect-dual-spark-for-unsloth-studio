@@ -6,7 +6,7 @@ NODE_IDS=('head','worker2','worker3')
 
 def port_anchor(port, vertical):
     if type(port) is not int or port not in (0,1): raise ValueError('Unknown physical port')
-    return (0,44+28+port*24,92) if vertical else (28+port*24,0,92)
+    return (11,49.75+28+port*24,92) if vertical else (28+port*24,-11,92)
 
 class ViewPreferences:
     def __init__(self,path=None):

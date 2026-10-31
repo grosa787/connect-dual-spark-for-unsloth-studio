@@ -5,7 +5,7 @@ import socket
 import struct
 import threading
 from PySide6.QtCore import QObject,Signal,Slot,Property,QTimer
-from .discovery import scan_new_devices,warm_neighbors,infer_topology
+from .discovery import scan_new_devices,warm_neighbors,infer_topology,filter_known_candidates
 from .inventory import scan
 from .onboarding import pair_device,trusted_node
 from .state import CONFIG,read_json,write_json
@@ -134,7 +134,7 @@ class DeviceManager(QObject):
             QTimer.singleShot(500,self.search)
         else:
             previous={c['id'] for c in self._candidates}
-            results=value.get('candidates',[])
+            results=filter_known_candidates(value.get('candidates',[]),self.manager._nodes)
             self._candidates=[c for c in results if not c.get('existing_id')]
             for recovered in (c for c in results if c.get('existing_id')):
                 for node in self.manager._topology['nodes']:

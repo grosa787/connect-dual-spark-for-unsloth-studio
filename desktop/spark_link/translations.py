@@ -1,6 +1,13 @@
 """Runtime UI translations. Unmodified command output stays in its original language."""
 # Russian source text maps to English, German and Spanish, in that order.
 MESSAGES={
+ 'Сзади':('Rear','Hinten','Detrás'),
+ 'Спереди':('Front','Vorne','Delante'),
+ 'Сверху':('Top','Oben','Arriba'),
+ 'Отдалить':('Zoom out','Verkleinern','Alejar'),
+ 'Приблизить':('Zoom in','Vergrößern','Acercar'),
+ 'Сбросить вид':('Reset view','Ansicht zurücksetzen','Restablecer vista'),
+ 'Поворот — мышью · масштаб — колёсиком':('Drag to rotate · scroll to zoom','Ziehen zum Drehen · Scrollen zum Zoomen','Arrastra para girar · desplaza para ampliar'),
  'Требуется проверка служб':('Check services','Dienste prüfen','Revisar servicios'),
  'Обзор':('Overview','Übersicht','Resumen'),
  'Кабели и Spark':('Cables and Spark','Kabel und Spark','Cables y Spark'),

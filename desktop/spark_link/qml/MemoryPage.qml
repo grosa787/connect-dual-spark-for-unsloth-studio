@@ -14,14 +14,14 @@ ScrollView {
         width:memory.availableWidth; spacing:16
         RowLayout {
             Layout.fillWidth:true; spacing:12
-            ComboBox {
+            SelectionBox {
                 objectName:"modelSourceSelector"; Layout.fillWidth:true; implicitHeight:42
                 model:[memory.t("Ссылка Hugging Face / GGUF"),memory.t("Ручной расчёт")]
                 currentIndex:planner.form.manual ? 1 : 0
                 onActivated:planner.setField('manual',currentIndex===1 ? 'true' : 'false')
                 Accessible.name:memory.t("Источник модели")
             }
-            ComboBox {
+            SelectionBox {
                 Layout.fillWidth:true; implicitHeight:42
                 model:planner.savedPlans
                 displayText:memory.t("Сохранённые планы")
@@ -54,7 +54,7 @@ ScrollView {
                             ActionButton { visible:!planner.form.manual; Layout.fillWidth:true; text:memory.t("Распознать"); primary:true; enabled:!planner.busy; onClicked:planner.analyze(planner.form.reference) }
                         }
                         ProgressBar { visible:planner.busy; indeterminate:true; Layout.fillWidth:true }
-                        ComboBox {
+                        SelectionBox {
                             visible:!planner.form.manual && memory.variants.length>0
                             Layout.fillWidth:true; implicitHeight:40
                             model:memory.variants.map(v=>v.label+" · "+(v.size_bytes/1073741824).toFixed(2)+" GiB")
@@ -74,7 +74,7 @@ ScrollView {
                         id:cacheFields; anchors { left:parent.left; right:parent.right; top:parent.top; margins:20 } spacing:12
                         Text { text:memory.t("Контекст и KV-кеш"); font.pixelSize:17; font.weight:Font.DemiBold; color:"#2d432d" }
                         ValueField { Layout.fillWidth:true; label:memory.t("Контекст следующего запуска, токенов"); value:String(planner.form.context); numeric:true; onCommitted:planner.setField('context',text) }
-                        ComboBox { Layout.fillWidth:true; implicitHeight:40; model:['KV: f16','KV: q8_0','KV: q4_0']; currentIndex:['f16','q8_0','q4_0'].indexOf(planner.form.dtype); onActivated:planner.setField('dtype',['f16','q8_0','q4_0'][currentIndex]); Accessible.name:memory.t("Тип KV-кеша") }
+                        SelectionBox { Layout.fillWidth:true; implicitHeight:40; model:['KV: f16','KV: q8_0','KV: q4_0']; currentIndex:['f16','q8_0','q4_0'].indexOf(planner.form.dtype); onActivated:planner.setField('dtype',['f16','q8_0','q4_0'][currentIndex]); Accessible.name:memory.t("Тип KV-кеша") }
                         CheckBox { Layout.fillWidth:true; text:memory.t("Задать KV-кеш вручную"); checked:planner.form.manual_kv; onToggled:planner.setField('manual_kv',checked ? 'true' : 'false') }
                         ValueField { Layout.fillWidth:true; visible:planner.form.manual_kv; label:memory.t("Общий бюджет KV-кеша, GiB"); numeric:true; value:String(planner.form.cache_gib); onCommitted:planner.setField('cache_gib',text) }
                         Text { Layout.fillWidth:true; text:memory.t("KV-кеш всего")+": "+(planner.cacheKnown && planner.result.kv_gib!==undefined ? planner.result.kv_gib.toFixed(2)+" GiB" : memory.t("нужен ручной бюджет")); wrapMode:Text.WordWrap; font.pixelSize:13; color:"#355331" }
@@ -94,7 +94,7 @@ ScrollView {
                         ValueField { Layout.fillWidth:true; label:memory.t("Резерв первого, GiB"); value:String(planner.form.head_reserve); numeric:true; onCommitted:planner.setField('head_reserve',text) }
                         ValueField { Layout.fillWidth:true; label:memory.t("Резерв остальных, GiB"); value:String(planner.form.worker_reserve); numeric:true; onCommitted:planner.setField('worker_reserve',text) }
                     }
-                    ComboBox { Layout.fillWidth:true; implicitHeight:40; model:[memory.t("Доли весов в процентах"),memory.t("Объём весов в GiB")]; currentIndex:planner.form.units==='gib' ? 1 : 0; onActivated:planner.setField('units',currentIndex===1 ? 'gib' : 'percent'); Accessible.name:memory.t("Единицы распределения") }
+                    SelectionBox { Layout.fillWidth:true; implicitHeight:40; model:[memory.t("Доли весов в процентах"),memory.t("Объём весов в GiB")]; currentIndex:planner.form.units==='gib' ? 1 : 0; onActivated:planner.setField('units',currentIndex===1 ? 'gib' : 'percent'); Accessible.name:memory.t("Единицы распределения") }
                     Repeater {
                         model:manager.nodes
                         ColumnLayout {

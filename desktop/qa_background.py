@@ -31,6 +31,14 @@ def hidden():
     client.connectToServer('spark-link-'+str(os.getuid()))
 def reopened():
     assert window().isVisible(), 'IPC failed to reopen native window'
+    shot=window().grabWindow()
+    gold=0
+    for y in range(220,min(540,shot.height()-30),2):
+        for x in range(280,shot.width()-30,2):
+            c=shot.pixelColor(x,y)
+            gold+=c.red()>c.green()+5 and c.green()>c.blue()*1.15
+    assert gold>300, 'Chassis did not render after background IPC reopen'
+    shot.save('/tmp/spark-link-qa/background-reopen.png')
     measurements['visible_mib']=round(rss(),1)
     window().hide()
 def finish():

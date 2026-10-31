@@ -35,7 +35,7 @@ ApplicationWindow {
 
     Rectangle {
         id: sidebar
-        width: 220; anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
+        width: 244; anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
         color: "#f9fbf6"
         Rectangle { width: 1; color: "#dfe6d9"; anchors { right: parent.right; top: parent.top; bottom: parent.bottom } }
         ColumnLayout {
@@ -84,7 +84,7 @@ ApplicationWindow {
             Text { text: window.t("Нативное приложение"); color: "#53634f"; font.pixelSize: 12; Layout.topMargin: 12 }
             Text { text: "Ubuntu ARM64  ·  v"+manager.version; color: "#6a7865"; font.pixelSize: 11 }
             Text { text:window.t("Язык приложения"); color:"#53634f"; font.pixelSize:12; Layout.topMargin:10 }
-            ComboBox {
+            SelectionBox {
                 objectName:"languageSelector"
                 Layout.fillWidth:true; implicitHeight:40
                 model:manager.languageNames
@@ -105,7 +105,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
                 spacing: 8
-                Text { Layout.fillWidth: true; elide: Text.ElideRight; text: window.titles[window.page]; font.pixelSize: 29; font.weight: Font.DemiBold; color: "#203024" }
+                Text { Layout.fillWidth: true; elide: Text.ElideRight; text: window.titles[window.page]; font.pixelSize: 27; font.weight: Font.DemiBold; color: "#203024" }
                 Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: window.captions[window.page]; font.pixelSize: 13; color: "#63725d" }
             }
             Rectangle {
@@ -145,7 +145,7 @@ ApplicationWindow {
                 }
                 Rectangle {
                     Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: devices.candidates.length>0 ? 200 : 280
-                    radius: 18; color: "#e7edde"; clip: true
+                    radius: 16; color: "#e9eee4"; clip: true
                     ClusterScene { anchors.fill: parent; nodes: manager.nodes; topology: manager.topology; orientations:manager.orientations; selectedNode: window.selectedNode; onSelected: function(node,port) { window.selectedNode=node } }
                     RowLayout {
                         anchors { right: parent.right; top: parent.top; margins: 16 }
@@ -158,10 +158,20 @@ ApplicationWindow {
                     Repeater {
                         model: manager.nodes
                         Rectangle {
+                            id: deviceCard
                             required property var modelData
                             required property int index
                             Layout.fillWidth: true; Layout.preferredHeight: 144
-                            radius: 12; color: "#ffffff"; border.color: "#dfe6d8"
+                            radius: 12; color: "#ffffff"
+                            border.color: window.selectedNode===index ? "#abc98c" : "#dfe6d8"
+                            border.width: activeFocus ? 2 : 1
+                            activeFocusOnTab: true
+                            Accessible.role: Accessible.Button
+                            Accessible.name: modelData.name
+                            Accessible.onPressAction: window.selectedNode=index
+                            Keys.onReturnPressed: window.selectedNode=index
+                            Keys.onSpacePressed: window.selectedNode=index
+                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { window.selectedNode=deviceCard.index; deviceCard.forceActiveFocus() } }
                             ColumnLayout {
                                 anchors { fill: parent; margins: 16 } spacing: 8
                                 RowLayout { Layout.fillWidth: true; Text { text: modelData.name; color: "#263928"; font.pixelSize: 16; font.weight: Font.DemiBold } Item { Layout.fillWidth: true } Rectangle { width: 8; height: 8; radius: 4; color: modelData.online ? "#719c43" : "#b48745" } }
@@ -185,7 +195,7 @@ ApplicationWindow {
                 ColumnLayout {
                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 12
                     Rectangle {
-                        Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 200; radius: 16; color: "#e7edde"; clip: true
+                        Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 200; radius: 16; color: "#e9eee4"; clip: true
                         ClusterScene {
                             objectName: "cableScene"
                             anchors.fill: parent; nodes: manager.nodes; topology: manager.topology; selectedNode: window.selectedNode; editing: true
@@ -211,20 +221,20 @@ ApplicationWindow {
                             Layout.fillWidth: true; implicitHeight: window.activeCable===index ? 98 : 48; radius: 10; color: window.activeCable===index ? "#edf4e3" : "#ffffff"; border.color: window.activeCable===index ? "#9ebf7a" : "#dce4d6"
                             ColumnLayout {
                                 anchors { fill: parent; margins: 9 } spacing: 5
-                                RowLayout { Layout.fillWidth: true; RadioButton { text: window.nodeName(cableRow.modelData.a)+"  ↔  "+window.nodeName(cableRow.modelData.b); checked: window.activeCable===cableRow.index; onClicked: window.activeCable=cableRow.index; font.pixelSize: 12 } }
+                                RowLayout { Layout.fillWidth: true; ChoiceRadio { text: window.nodeName(cableRow.modelData.a)+"  ↔  "+window.nodeName(cableRow.modelData.b); checked: window.activeCable===cableRow.index; onClicked: window.activeCable=cableRow.index; font.pixelSize: 12 } }
                                 RowLayout {
                                     visible: window.activeCable===cableRow.index
                                     spacing: 8; Layout.fillWidth: true
-                                    ComboBox { Layout.fillWidth: true; model: [window.t("Порт 0 · ближе к Ethernet"), window.t("Порт 1 · крайний")]; currentIndex: cableRow.modelData.a_port; enabled: !manager.busy; font.pixelSize: 12; onActivated: manager.setPort(cableRow.index,'a',currentIndex); Accessible.name: window.t("Порт первого конца кабеля") }
+                                    SelectionBox { Layout.fillWidth: true; model: [window.t("Порт 0 · ближе к Ethernet"), window.t("Порт 1 · крайний")]; currentIndex: cableRow.modelData.a_port; enabled: !manager.busy; font.pixelSize: 12; onActivated: manager.setPort(cableRow.index,'a',currentIndex); Accessible.name: window.t("Порт первого конца кабеля") }
                                     Text { text: "↔"; color: "#62765a" }
-                                    ComboBox { objectName: "cableB_"+cableRow.index; Layout.fillWidth: true; model: [window.t("Порт 0 · ближе к Ethernet"), window.t("Порт 1 · крайний")]; currentIndex: cableRow.modelData.b_port; enabled: !manager.busy; font.pixelSize: 12; onActivated: manager.setPort(cableRow.index,'b',currentIndex); Accessible.name: window.t("Порт второго конца кабеля") }
+                                    SelectionBox { objectName: "cableB_"+cableRow.index; Layout.fillWidth: true; model: [window.t("Порт 0 · ближе к Ethernet"), window.t("Порт 1 · крайний")]; currentIndex: cableRow.modelData.b_port; enabled: !manager.busy; font.pixelSize: 12; onActivated: manager.setPort(cableRow.index,'b',currentIndex); Accessible.name: window.t("Порт второго конца кабеля") }
                                 }
                             }
                         }
                     }
                 }
                 Rectangle {
-                    Layout.preferredWidth: 280; Layout.fillHeight: true; radius: 14; color: "#ffffff"; border.color: "#dce4d6"
+                    Layout.preferredWidth: 264; Layout.fillHeight: true; radius: 14; color: "#ffffff"; border.color: "#dce4d6"
                     ScrollView {
                         id: inspectorScroll
                         anchors { left:parent.left; right:parent.right; top:parent.top; bottom:applyTopology.top; margins:18; bottomMargin:12 }
@@ -240,10 +250,10 @@ ApplicationWindow {
                                 required property int index
                                 Layout.fillWidth: true; spacing: 6
                                 Text { text: modelData.name; color: "#3c5335"; font.pixelSize: 13; font.weight: Font.DemiBold }
-                                TextField { visible: index>0; Layout.fillWidth: true; text: modelData.ssh; placeholderText: "user@spark-xxxx.local"; enabled: !manager.busy; font.pixelSize: 12; onEditingFinished: manager.setTarget(index,text); Accessible.name: modelData.name+" SSH" }
+                                EntryField { visible: index>0; Layout.fillWidth: true; text: modelData.ssh; placeholderText: "user@spark-xxxx.local"; enabled: !manager.busy; font.pixelSize: 12; onEditingFinished: manager.setTarget(index,text); Accessible.name: modelData.name+" SSH" }
                                 Text { visible: index===0; text: window.t("Этот компьютер"); color: "#76836f"; font.pixelSize: 12 }
                                 Text { text:window.t("Положение корпуса"); font.pixelSize:12; color:"#63725d"; Layout.topMargin:4 }
-                                ComboBox {
+                                SelectionBox {
                                     objectName:"orientation_"+deviceEditor.index
                                     Layout.fillWidth:true; implicitHeight:38
                                     model:[window.t("Лёжа"),window.t("Вертикально")]
@@ -348,9 +358,9 @@ ApplicationWindow {
             }
             Text { visible:window.selectedCandidate.authorized===true; Layout.fillWidth:true; text:window.t("Доверенный SSH-доступ уже настроен. Логин и пароль не требуются."); wrapMode:Text.WordWrap; font.pixelSize:13; color:"#3f6331" }
             Text { visible:window.selectedCandidate.authorized!==true; text:window.t("Логин нового Spark"); font.pixelSize:13; color:"#415c36" }
-            TextField { id:loginField; objectName:"newSparkLogin"; visible:window.selectedCandidate.authorized!==true; Layout.fillWidth:true; implicitHeight:42; placeholderText:"username"; selectByMouse:true; Accessible.name:window.t("Логин нового Spark") }
+            EntryField { id:loginField; objectName:"newSparkLogin"; visible:window.selectedCandidate.authorized!==true; Layout.fillWidth:true; implicitHeight:42; placeholderText:"username"; selectByMouse:true; Accessible.name:window.t("Логин нового Spark") }
             Text { visible:window.selectedCandidate.authorized!==true; text:window.t("Пароль"); font.pixelSize:13; color:"#415c36" }
-            TextField { id:passwordField; objectName:"newSparkPassword"; visible:window.selectedCandidate.authorized!==true; Layout.fillWidth:true; implicitHeight:42; echoMode:showPassword.checked ? TextInput.Normal : TextInput.Password; maximumLength:4096; Accessible.name:window.t("Пароль") }
+            EntryField { id:passwordField; objectName:"newSparkPassword"; visible:window.selectedCandidate.authorized!==true; Layout.fillWidth:true; implicitHeight:42; echoMode:showPassword.checked ? TextInput.Normal : TextInput.Password; maximumLength:4096; Accessible.name:window.t("Пароль") }
             CheckBox { id:showPassword; visible:window.selectedCandidate.authorized!==true; text:window.t("Показать пароль"); checked:false }
             Text { Layout.fillWidth:true; text:window.t("Пароль сохраняется только в защищённом хранилище GNOME. Приложение проверит GPU и настроит дальнейший доступ по SSH-ключу."); wrapMode:Text.WordWrap; color:"#607456"; font.pixelSize:12 }
             RowLayout { Layout.fillWidth:true; spacing:12

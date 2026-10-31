@@ -1,5 +1,7 @@
 import QtQuick
 import QtQuick3D
+import QtQuick.Controls
+import QtQuick.Layouts
 import SparkLink 1.0
 
 Item {
@@ -10,6 +12,8 @@ Item {
     property int selectedNode: 0
     property bool editing: false
     property real yaw: 18
+    property real pitch: 25
+    property real zoom: 1
     signal selected(int node, int port)
     function t(source) { let language=manager.language; return manager.translate(source) }
     function verticalFor(index) { return scene.orientations[index]===true }
@@ -45,25 +49,26 @@ Item {
         camera: camera
         environment: SceneEnvironment {
             backgroundMode: SceneEnvironment.Color
-            clearColor: "#e7edde"
+            clearColor: "#e9eee4"
             antialiasingMode: SceneEnvironment.MSAA
             antialiasingQuality: SceneEnvironment.High
             aoEnabled: true
-            aoStrength: 20
-            aoDistance: 6
+            aoStrength: 28
+            aoDistance: 9
+            tonemapMode: SceneEnvironment.TonemapModeAces
         }
         PerspectiveCamera {
             id: camera
-            property real distance: Math.max(scene.nodes.length===3 ? 800 : 540, (scene.nodes.length===3 ? 1200 : 940)/(scene.width/Math.max(1,scene.height)))
-            position: Qt.vector3d(0,distance*0.485,distance*0.875)
-            eulerRotation.x: -29; clipFar: 3000; fieldOfView: 34
+            property real distance: scene.zoom*Math.max(scene.nodes.length===3 ? 800 : 570, (scene.nodes.length===3 ? 1200 : 940)/(scene.width/Math.max(1,scene.height)))
+            position: Qt.vector3d(0,20+distance*Math.sin(scene.pitch*Math.PI/180),distance*Math.cos(scene.pitch*Math.PI/180))
+            eulerRotation.x: -scene.pitch; clipFar: 4000; fieldOfView: 34
         }
-        DirectionalLight { eulerRotation: Qt.vector3d(-48,-35,0); brightness: 0.9; ambientColor: "#5b6652"; castsShadow: true; shadowFactor: 38; shadowMapQuality: Light.ShadowMapQualityVeryHigh; shadowMapFar: 1200; shadowBias: 1 }
-        DirectionalLight { eulerRotation: Qt.vector3d(-20,130,0); brightness: 0.45; color: "#edf5e5" }
+        DirectionalLight { eulerRotation: Qt.vector3d(-48,-35,0); brightness: 1; ambientColor: "#94978b"; castsShadow: true; shadowFactor: 28; shadowMapQuality: Light.ShadowMapQualityVeryHigh; shadowMapFar: 1200; shadowBias: 3 }
+        DirectionalLight { eulerRotation: Qt.vector3d(-25,130,0); brightness: 0.45; color: "#f3f4ee" }
         Node {
             id: rig
             eulerRotation.y: scene.yaw
-            Model { source: "#Rectangle"; eulerRotation.x: -90; y: -31; scale: Qt.vector3d(20,20,20); materials: PrincipledMaterial { baseColor: "#e7edde"; roughness: 1 } receivesShadows: true }
+            Model { source: "#Rectangle"; eulerRotation.x: -90; y: -25.4; scale: Qt.vector3d(40,40,40); materials: PrincipledMaterial { baseColor: "#e9eee4"; roughness: 1 } receivesShadows: true }
             Repeater3D {
                 model: 3
                 SparkDevice {
@@ -94,7 +99,7 @@ Item {
                         start: scene.anchorFor(cableModel.ai,cableModel.cable.a_port)
                         end: scene.anchorFor(cableModel.bi,cableModel.cable.b_port)
                     }
-                    materials: PrincipledMaterial { baseColor: cableModel.linked ? "#42692f" : "#8c9783"; roughness: 0.6 }
+                    materials: PrincipledMaterial { baseColor: cableModel.linked ? "#303c31" : "#7c8277"; roughness: 0.78 }
                     castsShadows: true
                 }
             }
@@ -105,33 +110,47 @@ Item {
         Rectangle {
             required property int index
             property vector3d projected: {
-                let angle=scene.yaw; let w=scene.width; let h=scene.height
+                let angle=scene.yaw; let pitch=scene.pitch; let zoom=scene.zoom; let w=scene.width; let h=scene.height
                 let p=scene.positionFor(index)
-                return view.mapFrom3DScene(rig.mapPositionToScene(Qt.vector3d(p.x,scene.verticalFor(index) ? 138 : 43,p.z)))
+                return view.mapFrom3DScene(rig.mapPositionToScene(Qt.vector3d(p.x,scene.verticalFor(index) ? 145 : 49,p.z)))
             }
             x: projected.x-width/2; y: projected.y-24
-            width: nameLabel.implicitWidth+20; height: 27; radius: 13
-            color: scene.selectedNode===index ? "#dff0c8" : "#f6f8f0"
-            border.color: "#c9d7bd"
-            Text { id: nameLabel; anchors.centerIn: parent; text: (index+1)+" · "+scene.nodes[index].name; font.pixelSize: 11; color: "#385230" }
+            width: nameLabel.implicitWidth+24; height: 28; radius: 8
+            color: scene.selectedNode===index ? "#e0f1c9" : "#fdfefb"
+            border.color: scene.selectedNode===index ? "#a5c77d" : "#d3dccb"
+            Text { id: nameLabel; anchors.centerIn: parent; text: (index+1)+" · "+scene.nodes[index].name; font.pixelSize: 11; font.weight: Font.Medium; color: "#385230" }
         }
     }
     MouseArea {
         anchors.fill: parent
         property real previousX
         property real downX
-        onPressed: function(mouse) { previousX=mouse.x; downX=mouse.x }
-        onPositionChanged: function(mouse) { if(pressed) { scene.yaw += (mouse.x-previousX)*0.25; previousX=mouse.x } }
+        property real previousY
+        property real downY
+        onPressed: function(mouse) { previousX=downX=mouse.x; previousY=downY=mouse.y }
+        onPositionChanged: function(mouse) { if(pressed) { scene.yaw += (mouse.x-previousX)*0.25; scene.pitch=Math.max(8,Math.min(85,scene.pitch+(mouse.y-previousY)*0.18)); previousX=mouse.x; previousY=mouse.y } }
+        onWheel: function(wheel) { scene.zoom=Math.max(0.6,Math.min(1.6,scene.zoom*(wheel.angleDelta.y>0 ? 0.9 : 1.1))); wheel.accepted=true }
         onClicked: function(mouse) {
-            if(Math.abs(mouse.x-downX)>5) return
+            if(Math.abs(mouse.x-downX)+Math.abs(mouse.y-downY)>5) return
             let hit=view.pick(mouse.x,mouse.y)
             if(hit.objectHit && hit.objectHit.deviceIndex !== undefined) scene.selected(hit.objectHit.deviceIndex, hit.objectHit.portIndex)
         }
-        onDoubleClicked: scene.yaw=18
+        onDoubleClicked: { scene.yaw=18; scene.pitch=25; scene.zoom=1 }
     }
     Rectangle {
         anchors { left: parent.left; bottom: parent.bottom; margins: 16 }
-        width: hint.implicitWidth+24; height: 30; radius: 15; color: "#f6f8f1"
-        Text { id: hint; anchors.centerIn: parent; text: scene.editing ? scene.t("Нажмите на разъём · потяните сцену для поворота") : scene.t("3D-вид · потяните для поворота"); font.pixelSize: 12; color: "#53634f" }
+        visible: scene.width>760
+        width: hint.implicitWidth+20; height: 30; radius: 8; color: "#fdfefb"
+        Text { id: hint; anchors.centerIn: parent; text: scene.t("Поворот — мышью · масштаб — колёсиком"); font.pixelSize: 11; color: "#53634f" }
+    }
+    RowLayout {
+        anchors { right: parent.right; bottom: parent.bottom; margins: 12 }
+        spacing: 5
+        SceneButton { objectName: "cameraRear"; text: scene.t("Сзади"); onClicked: { scene.yaw=0; scene.pitch=18 } }
+        SceneButton { objectName: "cameraFront"; text: scene.t("Спереди"); onClicked: { scene.yaw=180; scene.pitch=18 } }
+        SceneButton { objectName: "cameraTop"; text: scene.t("Сверху"); onClicked: { scene.yaw=0; scene.pitch=85 } }
+        SceneButton { text: "−"; Accessible.name: scene.t("Отдалить"); onClicked: scene.zoom=Math.min(1.6,scene.zoom*1.15) }
+        SceneButton { text: "+"; Accessible.name: scene.t("Приблизить"); onClicked: scene.zoom=Math.max(0.6,scene.zoom/1.15) }
+        SceneButton { objectName: "cameraReset"; text: "↺"; Accessible.name: scene.t("Сбросить вид"); onClicked: { scene.yaw=18; scene.pitch=25; scene.zoom=1 } }
     }
 }

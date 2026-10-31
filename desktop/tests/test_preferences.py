@@ -19,10 +19,12 @@ class PreferenceTests(unittest.TestCase):
             self.assertFalse(restored.vertical('worker3'))
 
     def test_vertical_ports_follow_the_rotated_chassis(self):
-        self.assertEqual(port_anchor(0,False),(28,0,92))
-        self.assertEqual(port_anchor(1,False),(52,0,92))
-        self.assertEqual(port_anchor(0,True),(0,72,92))
-        self.assertEqual(port_anchor(1,True),(0,96,92))
+        # Rear I/O sits below the case centre; Rz(90) maps (x,y) to (-y,x).
+        # A 49.75 mm lift keeps the 150 mm-wide shell on the same ground plane.
+        for port in (0,1):
+            x,y,z=port_anchor(port,False)
+            self.assertEqual((x,y,z),(28+24*port,-11,92))
+            self.assertEqual(port_anchor(port,True),(-y,49.75+x,z))
 
     def test_unknown_preferences_cannot_change_topology_or_create_nodes(self):
         with tempfile.TemporaryDirectory() as directory:

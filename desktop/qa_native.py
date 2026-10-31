@@ -37,7 +37,7 @@ print('QML loaded',flush=True)
 assert engine.rootObjects(), messages
 window=engine.rootObjects()[0]
 window.setPersistentGraphics(False)
-window.setPersistentSceneGraph(False)
+window.setPersistentSceneGraph(True)
 wait(9000)
 print('Inventory waited',flush=True)
 assert len(backend.nodes)==2 and all(n['online'] for n in backend.nodes), backend.nodes
@@ -56,12 +56,31 @@ def find(name):
         if item.objectName()==name: return item
         pending.extend(item.childItems())
     return None
+def assert_chassis_rendered():
+    scene=find('cableScene')
+    origin=scene.mapToScene(QPointF(0,0))
+    shot=window.grabWindow()
+    gold=0
+    for y in range(int(origin.y()+60),int(origin.y()+scene.height()-50),2):
+        for x in range(int(origin.x()+10),int(origin.x()+scene.width()-10),2):
+            c=shot.pixelColor(x,y)
+            gold+=c.red()>c.green()+5 and c.green()>c.blue()*1.15
+    assert gold>300, f'Chassis vanished from rendered scene: {gold} gold samples'
 for page in range(6):
     click('nav_'+str(page))
     assert window.property('page')==page
     assert window.grabWindow().save(str(folder/f'page-{page}.png'))
     print('Rendered page',page,flush=True)
 click('nav_1')
+click('languageSelector')
+window.grabWindow().save(str(folder/'language-popup.png'))
+QTest.keyClick(window,Qt.Key.Key_Escape); wait(200)
+scene=find('cableScene')
+assert scene is not None
+for name,yaw,pitch in (('cameraFront',180,18),('cameraTop',0,85),('cameraRear',0,18),('cameraReset',18,25)):
+    click(name)
+    assert scene.property('yaw')==yaw and scene.property('pitch')==pitch
+    assert window.grabWindow().save(str(folder/(name+'.png')))
 orientation=find('orientation_0')
 assert orientation is not None
 orientation.forceActiveFocus(); QTest.keyClick(window,Qt.Key.Key_Down); wait(500)
@@ -98,6 +117,9 @@ assert backend.clusterText!='Spark соединены', 'draft mismatch incorrec
 backend.setPort(0,'b',0)
 backend.refresh(); wait(6000)
 assert backend.clusterText=='Spark соединены', backend.clusterText
+known_macs={v['mac'].lower() for n in backend._nodes if n.get('online') for v in n.get('interfaces',{}).values() if v.get('mac')}
+assert not any(c.get('mac','').lower() in known_macs for c in backend.devices.candidates), 'Existing worker offered as new'
+assert_chassis_rendered()
 window.hide(); backend.setVisible(False); window.releaseResources(); wait(600)
 assert backend.timer.interval()==60000
 window.show(); backend.setVisible(True); wait(500)
@@ -106,6 +128,7 @@ window.resize(1000,700)
 wait(300)
 for page in (1,2,5):
     click('nav_'+str(page))
+    if page==1: assert_chassis_rendered()
     window.grabWindow().save(str(folder/f'compact-{page}.png'))
 assert not [m for m in messages if ('Error' in m or 'Unable' in m or 'failed' in m)], messages
 print('PASS: two-Spark inventory; six tabs; upright/mixed chassis and cables; four languages; persisted view preferences; pending third; port draft; hidden-window resource release; compact layouts.')

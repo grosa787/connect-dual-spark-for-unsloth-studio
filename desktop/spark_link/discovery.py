@@ -54,6 +54,15 @@ def fingerprint(address):
         return {'host_key':line,'fingerprint':'SHA256:'+digest,'key_id':digest}
     except Exception: return None
 
+def filter_known_candidates(candidates,nodes):
+    """Reconcile a delayed discovery result with the latest verified inventory."""
+    online=[n for n in nodes if n.get('online')]
+    macs={v['mac'].lower() for n in online for v in n.get('interfaces',{}).values() if v.get('mac')}
+    ids={n['machine_id'] for n in online if n.get('machine_id')}
+    keys={n['host_key_id'] for n in online if n.get('host_key_id')}
+    return [c for c in candidates if c.get('existing_id') or not (
+        c.get('mac','').lower() in macs or c.get('device',{}).get('machine_id') in ids or c.get('id') in keys)]
+
 def scan_new_devices(topology,known_nodes):
     head=next((n for n in known_nodes if n.get('local') and n.get('online')),None)
     if not head: return []

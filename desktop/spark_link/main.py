@@ -51,7 +51,9 @@ def main():
     if not engine.rootObjects(): return 1
     window=engine.rootObjects()[0]
     window.setPersistentGraphics(False)
-    window.setPersistentSceneGraph(False)
+    # Qt 6.8 loses static custom meshes/textures when the entire graph is torn
+    # down. Keep graph nodes, but release graphics/context and cheap caches.
+    window.setPersistentSceneGraph(True)
     tray=QSystemTrayIcon(QIcon(str(root/'assets/spark-link.svg')),app)
     menu=QMenu()
     show_action=QAction(app)

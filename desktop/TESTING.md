@@ -1,6 +1,16 @@
 **English** | [Русский](TESTING.ru.md) · [App instructions](README.md)
 
-# Verification — Spark Link 1.1.1
+# Spark Link verification
+
+## Spark Link 1.2.0 verification (2026-10-31)
+
+- 138 CLI tests passed. The desktop suite ran 42 tests: 40 passed in the Qt runtime; the two PyYAML-dependent tests passed separately under Ubuntu system Python (five network tests in that run).
+- Real ARM64 Qt: six pages, four languages, camera presets and popup, mixed/upright devices, port drafts, pending third-device scene and 1000×700 layout.
+- Hide/show regression reproduced with missing chassis. Retaining scene-graph nodes while allowing graphics/context cache release fixes the visual check; manual mesh re-upload was rejected after a Qt render-image crash under gdb.
+- Installed 1.2.0 `.run`: isolated Qt imports, hidden start, IPC reopen with visible chassis, hide, Studio HTTP 200 and independent RPC available. Sample RSS: 399.2 / 404.9 / 401.0 MiB (hidden start / visible / hidden again), higher than the old simpler scene.
+- Generation study: ordinary Mistral versus n-gram and DSpark, identical main weights/F16 KV and controlled requests. [Measurements and quality limits](../docs/design-and-generation-2026-10-31.md). Normal Studio launch settings remain unchanged.
+
+## Historical verification — Spark Link 1.1.1
 
 Verified on 2026-10-31 with the available Ubuntu 24.04 ARM64 DGX Spark pair.
 
@@ -31,3 +41,5 @@ The three-node topology and argument construction are tested in software. Three 
 Application rendering and menu activation were checked in a virtual X11 display because the primary Spark was at its graphical login screen. The application is installed in the user's menu/desktop for their normal graphical session.
 
 Power-cut, internet-disconnection and live first-password onboarding of a previously unknown third Spark were not physically tested. Recovery/rollback behavior is tested with isolated interrupted-update fixtures; real-pair recovery was a no-op check. Running distributed inference cannot continue through loss of an essential worker. A protected, unlocked GNOME keyring is required for unattended privileged recovery; ordinary RPC service boot does not require the GUI or a stored password.
+
+[Installation](../docs/images/en/install.png) · [Updates](../docs/images/en/updates.png) · [Journal](../docs/images/en/journal.png) · [Onboarding](../docs/images/en/onboarding.png)
