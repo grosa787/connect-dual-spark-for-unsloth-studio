@@ -1,0 +1,126 @@
+{
+  "tested_date": "2026-10-31",
+  "devices": 2,
+  "hardware": "NVIDIA DGX Spark GB10",
+  "os": "Ubuntu 24.04 ARM64",
+  "versions": {
+    "unsloth": "2026.10.11",
+    "unsloth_zoo": "2026.10.11",
+    "torch": "2.10.0+cu130",
+    "node": "24.22.1",
+    "npm": "11.19.1",
+    "llama_cpp": "b11985-mix-c116c32",
+    "source_commit": "6f4cc4d72556554a7c137de536e2fbd93fd7f907"
+  },
+  "fastload_manifest": {
+    "binaries": {
+      "host": "2e654e0f672a0901de625391444e8914bccd81e27aa07296865fc6ecd41d8e7c",
+      "host_rpc": "98f5eb65d4635a4aa965e9e79daaf63126311e9c5fbd2081858488a462b44ae3"
+    },
+    "build_id": "b59492e60c9cb513b24176170f9ab83aa72b4cd0264d6c6df403d556bac5962e",
+    "cmake_flags": [
+      "-DGGML_CUDA=ON",
+      "-DGGML_RPC=ON",
+      "-DGGML_RPC_RDMA=ON",
+      "-DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc",
+      "-DCMAKE_BUILD_TYPE=Release"
+    ],
+    "patch_digest": "58a0a2ffd942d206057e61629f34c26fb4055247658244f171132d4bcb2263c1",
+    "upstream_identity": {
+      "build_info_sha256": "5f7d2cb31a5618560642df0ddcd0f8c01d85424cfa9bc8dbfcd4df6600bb4bec",
+      "llama_server_sha256": "93f94e4cfed0e39cd7128a668a86c9e454a237f450518055d3679cb52a98162f",
+      "prebuilt_info_sha256": "1a532890bab1ded453f47833fc54ba198dabacc01afaa56375e9ec43213f1ce9",
+      "release_tag": "b11985-mix-c116c32",
+      "rpc_library_sha256": "5aac2adc59032ea34013cdeb7a699a8dcd4643bc10acdf68268b1cf07effaadd",
+      "rpc_source_sha256": "0ad4d40a92086460e9896d8849e067b806e8e90fd9dd93d416dfed680edae19e",
+      "source_commit": "6f4cc4d72556554a7c137de536e2fbd93fd7f907"
+    },
+    "worker_binary_sha256": "1da071d2d2dc8cfc3e7fa87f26d3a4dd11fc29a06d2e8679e68e2da2391ad101",
+    "worker_runtime_digest": "8deaa632e49b3edc42668101399e10e028a876d815f2b85c5196f28d9fe1bf51",
+    "worker_service": "connect-dual-spark-rpc.service"
+  },
+  "model": {
+    "repo": "unsloth/DeepSeek-V4-Flash-Vision-Exp-GGUF",
+    "quantization": "UD-Q8_K_XL",
+    "placement": {
+      "split": "43,57",
+      "devices": "CUDA0,RPC0",
+      "context": "1048576",
+      "load_seconds": 165.2
+    },
+    "parallel_slots": 4,
+    "buffers_mib": {
+      "weights": {
+        "CUDA0": 67303.34,
+        "RPC0": 86052.51
+      },
+      "kv": {
+        "CUDA0": 11833.0,
+        "RPC0": 15816.0
+      }
+    },
+    "os_memory_available_gib_approx": {
+      "head": 27,
+      "worker": 11
+    },
+    "rdma_activated": true,
+    "gpu_layers_offloaded": 44
+  },
+  "text_test": {
+    "content": "4",
+    "usage": {
+      "prompt_tokens": 29,
+      "completion_tokens": 2,
+      "total_tokens": 31,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "audio_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "audio_tokens": 0,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0
+      }
+    }
+  },
+  "vision_test": {
+    "content": "Red",
+    "usage": {
+      "prompt_tokens": 144,
+      "completion_tokens": 2,
+      "total_tokens": 146,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "audio_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "audio_tokens": 0,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0
+      }
+    }
+  },
+  "tests": {
+    "cli": 132,
+    "desktop": 40,
+    "ubuntu_netplan_tests_run_separately": 2,
+    "small_model_saved_policy": "45:55, context 512"
+  },
+  "final_state": {
+    "model_unloaded": true,
+    "studio_health_http": 200,
+    "studio_service_active_enabled": true,
+    "rpc_service_active_enabled": true,
+    "refresh_watcher_active_enabled": true,
+    "update_pending_cleared": true,
+    "user_linger": true
+  },
+  "limits": [
+    "Short text/image requests; no million-token prompt prefill benchmark",
+    "Two physical Spark devices only",
+    "No physical power-cut test",
+    "TorchCodec audio decoding unavailable: no matching platform wheel"
+  ]
+}

@@ -4,6 +4,8 @@
 
 Verified on 2026-10-31 with the available Ubuntu 24.04 ARM64 DGX Spark pair.
 
+The later [runtime update report](../docs/runtime-update-2026-10-31.md) records the successful Unsloth 2026.10.11 / llama.cpp b11985 rebuild, actual Studio Q8 text/vision requests at configured context 1048576, per-device weights/KV buffers and final unloaded state. It also records a real failed-download rollback, supplementing the isolated rollback fixtures below.
+
 - Existing CLI suite: **132 passed**.
 - Desktop management suite: **40 tests**, 38 passed in the isolated Qt runtime and the two netplan/PyYAML tests passed separately using Ubuntu system Python. Includes unhealthy-update rollback, durable JSON recovery, offline model metadata, discovery topology/deduplication, per-worker manifests, allocation/context enforcement, model-specific policy removal and password stdin isolation.
 - Native Qt Quick / Qt Quick 3D test: all six tabs in all four languages; two real Spark inventories; upright/mixed orientations persisted across reload; third-device pending state; keyboard connector selection; draft retained across polling; mismatched draft rejected; hidden-window resource release; 1240×820 and 1000×700 screenshots. No QML loading/type errors.

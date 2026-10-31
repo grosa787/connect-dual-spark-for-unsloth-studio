@@ -4,6 +4,8 @@
 
 An independently installable Qt Quick / Qt Quick 3D app for Ubuntu 24.04+ ARM64 on the primary NVIDIA DGX Spark. It bundles its own management engine and Qt runtime; the CLI does not need to be installed. The CLI also works without the app. They manage the same Studio/RPC installation, so do not run simultaneous installation/update jobs.
 
+[Verified backend update: Unsloth 2026.10.11, llama.cpp b11985, Q8 text and vision on two Sparks](../docs/runtime-update-2026-10-31.md).
+
 ![Spark Link cable editor — English interface](../docs/images/en/cables.png)
 
 ## Interface language

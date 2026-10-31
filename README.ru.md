@@ -6,6 +6,8 @@
 
 Отдельное приложение с 3D-схемой кабелей, установкой и обновлениями. Оно не требует установленной CLI. [Полная инструкция](desktop/README.ru.md) · [Скачать приложение](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.1.0).
 
+**Последняя проверенная среда:** Unsloth 2026.10.11 + llama.cpp b11985-mix-c116c32. На двух Spark прошли текстовая и визуальная проверки Q8 с настроенным контекстом 1048576. [Результаты и команды обновления](docs/runtime-update-2026-10-31.ru.md).
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash
 ```

@@ -6,6 +6,8 @@
 
 A separate native app with a 3D cable editor, installation and update controls is available. It does not require the installed CLI. [Desktop instructions](desktop/README.md) · [Download the app](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.1.0).
 
+**Latest verified runtime:** Unsloth 2026.10.11 + llama.cpp b11985-mix-c116c32. The two-Spark Q8/1048576-context text and vision checks passed. [Update results and commands](docs/runtime-update-2026-10-31.md).
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash
 ```
