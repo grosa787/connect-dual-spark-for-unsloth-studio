@@ -5,14 +5,34 @@
 -        /* .host_buffer           = */ false,
 +        /* .host_buffer           = */ true,
          /* .buffer_from_host_ptr  = */ false,
-@@ -23,1 +23,6 @@
+@@ -23,1 +23,26 @@
++static ggml_backend_buffer_t ggml_backend_rpc_host_buffer_alloc(ggml_backend_buffer_type_t buft, size_t size) {
++    // DirectIO aligns the base pointer before reading a full staging chunk.
++    // The loader's chunk includes 2 * file_alignment, so one extra chunk is
++    // sufficient slack for every supported alignment. CPU malloc leaves the
++    // unused virtual padding untouched; only the staging data becomes resident.
++    if (size > SIZE_MAX / 2) {
++        return nullptr;
++    }
++    auto * buffer = ggml_backend_buft_alloc_buffer(ggml_backend_cpu_buffer_type(), size * 2);
++    if (buffer != nullptr) {
++        buffer->buft = buft;
++    }
++    return buffer;
++}
++
 +static ggml_backend_buffer_type_t ggml_backend_rpc_device_get_host_buffer_type(ggml_backend_dev_t dev) {
 +    GGML_UNUSED(dev);
-+    return ggml_backend_cpu_buffer_type();
++    static ggml_backend_buffer_type host_type = []() {
++        ggml_backend_buffer_type result = *ggml_backend_cpu_buffer_type();
++        result.iface.alloc_buffer = ggml_backend_rpc_host_buffer_alloc;
++        return result;
++    }();
++    return &host_type;
 +}
 +
  static const struct ggml_backend_device_i ggml_backend_rpc_device_i = {
-@@ -24,3 +29,3 @@
+@@ -24,3 +49,3 @@
      /* .get_buffer_type      = */ ggml_backend_rpc_device_get_buffer_type,
 -    /* .get_host_buffer_type = */ NULL,
 +    /* .get_host_buffer_type = */ ggml_backend_rpc_device_get_host_buffer_type,

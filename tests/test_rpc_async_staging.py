@@ -40,7 +40,7 @@ class RpcAsyncStagingTests(unittest.TestCase):
     def test_rpc_exposes_cpu_staging_and_keeps_device_capabilities(self):
         result=patch_rpc_source(SOURCE)
         self.assertIn('/* .host_buffer           = */ true,',result)
-        self.assertIn('return ggml_backend_cpu_buffer_type();',result)
+        self.assertIn('ggml_backend_cpu_buffer_type()',result)
         self.assertIn('/* .get_host_buffer_type = */ ggml_backend_rpc_device_get_host_buffer_type,',result)
         for field in ('/* .async                 = */ true,','/* .buffer_from_host_ptr  = */ false,','/* .events                = */ true,'):
             self.assertIn(field,result)
@@ -91,5 +91,52 @@ int main() {
         with tempfile.TemporaryDirectory() as directory:
             source=Path(directory)/'check.cpp'; binary=Path(directory)/'check'; source.write_text(code)
             subprocess.run(['c++','-std=c++17',str(source),'-o',str(binary)],check=True,capture_output=True)
+            result=subprocess.run([str(binary)],capture_output=True)
+            self.assertEqual(result.returncode,0,result.stderr.decode(errors='replace'))
+
+    @unittest.skipUnless(shutil.which('c++'),'A C++ compiler is needed for alignment behavior checks')
+    def test_staging_has_alignment_slack_without_changing_the_cpu_allocator(self):
+        patched=patch_rpc_source(SOURCE)
+        pieces=re.findall(r'^static (?:ggml_backend_buffer_t|ggml_backend_buffer_type_t) ggml_backend_rpc_(?:host_buffer_alloc|device_get_host_buffer_type)\([^\n]+\) \{.*?^}',patched,re.S|re.M)
+        code='''#include <cstdlib>
+#include <cstdint>
+#include <cassert>
+#include <limits>
+#include <initializer_list>
+#define GGML_UNUSED(x) (void)(x)
+struct ggml_backend_buffer_type;
+struct ggml_backend_buffer { ggml_backend_buffer_type * buft; size_t size; unsigned char * data; void * raw; };
+using ggml_backend_buffer_t=ggml_backend_buffer *;
+using ggml_backend_buffer_type_t=ggml_backend_buffer_type *;
+using ggml_backend_dev_t=void *;
+using allocator=ggml_backend_buffer_t (*)(ggml_backend_buffer_type_t,size_t);
+struct ggml_backend_buffer_type { struct { allocator alloc_buffer; } iface; };
+static int calls=0;
+static ggml_backend_buffer_t cpu_alloc(ggml_backend_buffer_type_t t,size_t n) {
+ ++calls; void * raw=std::aligned_alloc(4096,((n+8191)/4096)*4096);
+ return new ggml_backend_buffer{t,n,static_cast<unsigned char *>(raw)+64,raw};
+}
+static ggml_backend_buffer_type cpu_type{{cpu_alloc}};
+static ggml_backend_buffer_type_t ggml_backend_cpu_buffer_type() { return &cpu_type; }
+static ggml_backend_buffer_t ggml_backend_buft_alloc_buffer(ggml_backend_buffer_type_t t,size_t n) { return t->iface.alloc_buffer(t,n); }
+'''+ '\n'.join(pieces)+'''
+int main() {
+ auto * t=ggml_backend_rpc_device_get_host_buffer_type(nullptr);
+ for (size_t alignment : {size_t(512),size_t(4096),size_t(65536)}) {
+  const size_t read_size=65536+2*alignment;
+  auto * b=ggml_backend_buft_alloc_buffer(t,read_size);
+  uintptr_t ptr=reinterpret_cast<uintptr_t>(b->data),aligned=(ptr+alignment-1)&~uintptr_t(alignment-1);
+  assert(aligned+read_size <= ptr+b->size);
+  assert(b->buft==t && cpu_type.iface.alloc_buffer==cpu_alloc);
+  std::free(b->raw); delete b;
+ }
+ const int before=calls;
+ assert(ggml_backend_buft_alloc_buffer(t,SIZE_MAX)==nullptr && calls==before);
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            source=Path(directory)/'alignment.cpp'; binary=Path(directory)/'alignment'; source.write_text(code)
+            compiled=subprocess.run(['c++','-std=c++17',str(source),'-o',str(binary)],capture_output=True)
+            self.assertEqual(compiled.returncode,0,compiled.stderr.decode(errors='replace'))
             result=subprocess.run([str(binary)],capture_output=True)
             self.assertEqual(result.returncode,0,result.stderr.decode(errors='replace'))

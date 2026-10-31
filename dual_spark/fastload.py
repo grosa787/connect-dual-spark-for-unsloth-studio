@@ -36,9 +36,29 @@ _PATCHED_RPC_CACHE_FUNCTION = """static bool rpc_use_hash_cache(const ggml_tenso
 _RPC_DEVICE_INTERFACE = "static const struct ggml_backend_device_i ggml_backend_rpc_device_i = {"
 _RPC_HOST_BUFFER_DISABLED = "/* .host_buffer           = */ false,"
 _RPC_HOST_BUFFER_NULL = "/* .get_host_buffer_type = */ NULL,"
-_RPC_HOST_BUFFER_GETTER = """static ggml_backend_buffer_type_t ggml_backend_rpc_device_get_host_buffer_type(ggml_backend_dev_t dev) {
+_RPC_HOST_BUFFER_GETTER = """static ggml_backend_buffer_t ggml_backend_rpc_host_buffer_alloc(ggml_backend_buffer_type_t buft, size_t size) {
+    // DirectIO aligns the base pointer before reading a full staging chunk.
+    // The loader's chunk includes 2 * file_alignment, so one extra chunk is
+    // sufficient slack for every supported alignment. CPU malloc leaves the
+    // unused virtual padding untouched; only the staging data becomes resident.
+    if (size > SIZE_MAX / 2) {
+        return nullptr;
+    }
+    auto * buffer = ggml_backend_buft_alloc_buffer(ggml_backend_cpu_buffer_type(), size * 2);
+    if (buffer != nullptr) {
+        buffer->buft = buft;
+    }
+    return buffer;
+}
+
+static ggml_backend_buffer_type_t ggml_backend_rpc_device_get_host_buffer_type(ggml_backend_dev_t dev) {
     GGML_UNUSED(dev);
-    return ggml_backend_cpu_buffer_type();
+    static ggml_backend_buffer_type host_type = []() {
+        ggml_backend_buffer_type result = *ggml_backend_cpu_buffer_type();
+        result.iface.alloc_buffer = ggml_backend_rpc_host_buffer_alloc;
+        return result;
+    }();
+    return &host_type;
 }
 
 """
