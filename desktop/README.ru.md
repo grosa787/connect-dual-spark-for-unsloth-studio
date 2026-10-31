@@ -6,6 +6,8 @@
 
 [Проверенное обновление среды: Unsloth 2026.10.11, llama.cpp b11985, текст и изображения на Q8 через два Spark](../docs/runtime-update-2026-10-31.ru.md).
 
+Spark Link 1.1.1 включает общее ускорение RPC-загрузки и безопасно обновляет независимые управляющие файлы fastload, сохраняя пользовательские правила запуска. [Отчёт о скорости и пределе памяти Mistral](../docs/startup-and-mistral-2026-10-31.ru.md).
+
 ![Редактор подключения — русский интерфейс](../docs/images/ru/cables.png)
 
 ## Язык интерфейса
@@ -33,18 +35,18 @@ curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-uns
 
 ## Скачали файл вручную
 
-Самый простой вариант — [Spark-Link-1.1.0-arm64.run](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/download/desktop-v1.1.0/Spark-Link-1.1.0-arm64.run). После скачивания выполните:
+Самый простой вариант — [Spark-Link-1.1.1-arm64.run](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/download/desktop-v1.1.1/Spark-Link-1.1.1-arm64.run). После скачивания выполните:
 
 ```bash
-bash "$HOME/Downloads/Spark-Link-1.1.0-arm64.run"
+bash "$HOME/Downloads/Spark-Link-1.1.1-arm64.run"
 ```
 
 Если браузер сохраняет в «Загрузки», замените `Downloads` на фактический каталог. `chmod` и ручная распаковка не нужны. Установщик сам добавит приложение в меню.
 
-Для отдельно скачанного [tar.gz-архива](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/download/desktop-v1.1.0/Spark-Link-1.1.0-arm64.tar.gz) используйте:
+Для отдельно скачанного [tar.gz-архива](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/download/desktop-v1.1.1/Spark-Link-1.1.1-arm64.tar.gz) используйте:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash -s -- --archive "$HOME/Downloads/Spark-Link-1.1.0-arm64.tar.gz"
+curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash -s -- --archive "$HOME/Downloads/Spark-Link-1.1.1-arm64.tar.gz"
 ```
 
 Или распакуйте архив обычным архиватором, откройте терминал в полученной папке **Spark-Link** и выполните:
@@ -114,7 +116,7 @@ curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-uns
 Для `.deb`, скачанного вручную:
 
 ```bash
-sudo apt install "$HOME/Downloads/connect-dual-spark_0.6.0_arm64.deb"
+sudo apt install "$HOME/Downloads/connect-dual-spark_0.6.1_arm64.deb"
 connect-dual-spark --lang ru install
 ```
 
@@ -129,7 +131,7 @@ connect-dual-spark --lang ru refresh
 connect-dual-spark --lang ru update-unsloth
 ```
 
-CLI 0.6.0 рассчитана на два Spark. Новая графическая схема трёх устройств живёт в приложении. Переустановка старой CLI-настройки может заменить пользовательский launcher; для обновления уже настроенной пользовательской установки используйте вкладку **Обновления** приложения.
+CLI 0.6.1 рассчитана на два Spark. Новая графическая схема трёх устройств живёт в приложении. Переустановка старой CLI-настройки может заменить пользовательский launcher; для обновления уже настроенной пользовательской установки используйте вкладку **Обновления** приложения.
 
 ## Сборка из исходников
 

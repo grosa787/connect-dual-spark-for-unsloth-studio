@@ -1,8 +1,10 @@
 **English** | [Русский](TESTING.ru.md) · [App instructions](README.md)
 
-# Verification — Spark Link 1.1.0
+# Verification — Spark Link 1.1.1
 
 Verified on 2026-10-31 with the available Ubuntu 24.04 ARM64 DGX Spark pair.
+
+The [startup/capacity report](../docs/startup-and-mistral-2026-10-31.md) and [validation JSON](../docs/startup-mistral-validation-2026-10-31.json) cover 1.1.1: **138 CLI tests and 41 desktop tests**, alignment-safe asynchronous RPC loading, actual Q8 text/vision controls, a matched minimal-context Mistral control and a fully processed 106240-token Mistral prompt. The two desktop netplan tests were additionally run with Ubuntu system Python. Native six-tab/four-language interaction and the installed menu launcher passed again after installing 1.1.1. The remaining bullets below retain the earlier release checks as historical coverage.
 
 The later [runtime update report](../docs/runtime-update-2026-10-31.md) records the successful Unsloth 2026.10.11 / llama.cpp b11985 rebuild, actual Studio Q8 text/vision requests at configured context 1048576, per-device weights/KV buffers and final unloaded state. It also records a real failed-download rollback, supplementing the isolated rollback fixtures below.
 

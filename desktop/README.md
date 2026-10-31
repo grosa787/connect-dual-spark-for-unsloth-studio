@@ -6,6 +6,8 @@ An independently installable Qt Quick / Qt Quick 3D app for Ubuntu 24.04+ ARM64 
 
 [Verified backend update: Unsloth 2026.10.11, llama.cpp b11985, Q8 text and vision on two Sparks](../docs/runtime-update-2026-10-31.md).
 
+Spark Link 1.1.1 includes the shared asynchronous RPC loader and safely updates the independent fastload helpers while retaining custom launch rules. [Performance and Mistral capacity report](../docs/startup-and-mistral-2026-10-31.md).
+
 ![Spark Link cable editor — English interface](../docs/images/en/cables.png)
 
 ## Interface language
@@ -32,13 +34,13 @@ The installer downloads and checks the release archive, extracts it, creates an 
 For a manually downloaded self-extracting installer:
 
 ```bash
-bash "$HOME/Downloads/Spark-Link-1.1.0-arm64.run"
+bash "$HOME/Downloads/Spark-Link-1.1.1-arm64.run"
 ```
 
 For a manually downloaded tar.gz archive:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash -s -- --archive "$HOME/Downloads/Spark-Link-1.1.0-arm64.tar.gz"
+curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash -s -- --archive "$HOME/Downloads/Spark-Link-1.1.1-arm64.tar.gz"
 ```
 
 Alternatively extract the archive in a file manager, open a terminal inside **Spark-Link** and run `bash ./install.sh`. Both formats install the same native app. No manual chmod or `.deb` extraction is required. These commands target Ubuntu ARM64 Spark devices, not macOS/Windows or arbitrary Linux architectures. Qt wheels are included; an extracted release installs without downloading Python packages when the required system libraries are already present.
@@ -75,7 +77,7 @@ curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-uns
 Manual package installation uses apt, not an archive manager:
 
 ```bash
-sudo apt install "$HOME/Downloads/connect-dual-spark_0.6.0_arm64.deb"
+sudo apt install "$HOME/Downloads/connect-dual-spark_0.6.1_arm64.deb"
 connect-dual-spark install
 connect-dual-spark check
 connect-dual-spark status
@@ -85,7 +87,7 @@ connect-dual-spark refresh
 connect-dual-spark update-unsloth
 ```
 
-CLI 0.6.0 supports two devices. The new three-device topology belongs to the app. Reinstalling the legacy CLI guard can replace a customized launcher; use the app's Updates tab for an existing customized setup.
+CLI 0.6.1 supports two devices. The new three-device topology belongs to the app. Reinstalling the legacy CLI guard can replace a customized launcher; use the app's Updates tab for an existing customized setup.
 
 ## Build
 

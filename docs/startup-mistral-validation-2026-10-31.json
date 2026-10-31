@@ -1,0 +1,186 @@
+{
+  "date": "2026-10-31",
+  "scope": "Two NVIDIA DGX Spark GB10, shared GGUF/RPC loader; no model-name filter",
+  "cli_version": "0.6.1",
+  "app_version": "1.1.1",
+  "runtime": "b11985-mix-c116c32",
+  "source_commit": "6f4cc4d72556554a7c137de536e2fbd93fd7f907",
+  "managed_build_manifest": {
+    "binaries": {
+      "host": "30c6a270b05432060177695a038446b8bd50773ef389c19f99bf29e568959b6a",
+      "host_rpc": "67ea3ee976bad08371a9ac66cff9a9d756f3b3bc13de80363e77a88978df09fd"
+    },
+    "build_id": "43e6caad6164ca8ad0d2a1bc6299a92f19c16df00a159781babd58e45dd01871",
+    "cmake_flags": [
+      "-DGGML_CUDA=ON",
+      "-DGGML_RPC=ON",
+      "-DGGML_RPC_RDMA=ON",
+      "-DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc",
+      "-DCMAKE_BUILD_TYPE=Release"
+    ],
+    "patch_digest": "f903c60235761075b29bf47327105a37207d224bc1c14444f42aeca87d0f83f1",
+    "upstream_identity": {
+      "build_info_sha256": "5f7d2cb31a5618560642df0ddcd0f8c01d85424cfa9bc8dbfcd4df6600bb4bec",
+      "llama_server_sha256": "93f94e4cfed0e39cd7128a668a86c9e454a237f450518055d3679cb52a98162f",
+      "prebuilt_info_sha256": "1a532890bab1ded453f47833fc54ba198dabacc01afaa56375e9ec43213f1ce9",
+      "release_tag": "b11985-mix-c116c32",
+      "rpc_library_sha256": "5aac2adc59032ea34013cdeb7a699a8dcd4643bc10acdf68268b1cf07effaadd",
+      "rpc_source_sha256": "0ad4d40a92086460e9896d8849e067b806e8e90fd9dd93d416dfed680edae19e",
+      "source_commit": "6f4cc4d72556554a7c137de536e2fbd93fd7f907"
+    },
+    "worker_binary_sha256": "97a4dde081397a17024da2f8b4717ac46c365c69eed03ed495783db4e0bc8d69",
+    "worker_runtime_digest": "514cd12754020e6d64e57daef96a8312cc4117d55b12809cce21e596d0d8c395",
+    "worker_service": "connect-dual-spark-rpc.service"
+  },
+  "q8": {
+    "repo": "unsloth/DeepSeek-V4-Flash-Vision-Exp-GGUF",
+    "quant": "UD-Q8_K_XL",
+    "context": 1048576,
+    "slots": 4,
+    "split": "43,57",
+    "kv": "f16",
+    "baseline_ready_seconds": 165.2,
+    "final_ready_seconds": 96.3,
+    "speedup_percent": 41.70702179176755,
+    "text_answer": "4",
+    "vision_answer": "Red",
+    "buffer_allocations_mib": {
+      "weights": {
+        "CUDA0": 67303.34,
+        "RPC0": 86052.51
+      },
+      "kv": {
+        "CUDA0": 11833.0,
+        "RPC0": 15816.0
+      }
+    }
+  },
+  "mistral": {
+    "repo": "unsloth/Mistral-Large-4-1T-A52B-GGUF",
+    "revision": "1eb4373d37e76f6e7b4b8efa20e1b1ca40b3b964",
+    "quant": "UD-IQ1_S",
+    "file_size_gib": 217.00706735439599,
+    "layer_split": "46,54",
+    "gpu_weights_mib": {
+      "primary": 108528.49,
+      "worker": 112688.73
+    },
+    "cpu_embedding_mib": 984.38,
+    "minimal_context": 512,
+    "baseline_ready_seconds": 208.213,
+    "final_minimal_ready_seconds": 110.678,
+    "minimal_decode_tokens_per_second": [
+      7.158215904304461,
+      7.182194401304152
+    ],
+    "deterministic_minimal_outputs_match": true,
+    "largest_fully_validated_context": 106496,
+    "maximum_ready_seconds": 108.575,
+    "kv_type": "f16",
+    "slots": 1,
+    "maximum_profile_memory": [
+      {
+        "minimum_available_gib": 2.293621063232422,
+        "maximum_added_swap_gib": 0.00077056884765625
+      },
+      {
+        "minimum_available_gib": 1.8306732177734375,
+        "maximum_added_swap_gib": 0.0
+      }
+    ],
+    "full_uncached_prompt": {
+      "cache_n": 0,
+      "prompt_n": 106240,
+      "prompt_ms": 603445.943,
+      "prompt_per_token_ms": 5.680025818900602,
+      "prompt_per_second": 176.05553775344546,
+      "predicted_n": 83,
+      "predicted_ms": 12912.897,
+      "predicted_per_token_ms": 157.4743536585366,
+      "predicted_per_second": 6.350240383703206
+    },
+    "full_uncached_elapsed_seconds": 616.3809275910025,
+    "chat_check": {
+      "content": "4",
+      "usage": {
+        "completion_tokens": 78,
+        "prompt_tokens": 106240,
+        "total_tokens": 106318,
+        "prompt_tokens_details": {
+          "cached_tokens": 106239
+        }
+      },
+      "timings": {
+        "cache_n": 106239,
+        "prompt_n": 1,
+        "prompt_ms": 164.334,
+        "prompt_per_token_ms": 164.334,
+        "prompt_per_second": 6.085168011488797,
+        "predicted_n": 78,
+        "predicted_ms": 11792.709,
+        "predicted_per_token_ms": 153.15206493506494,
+        "predicted_per_second": 6.5294581592745145
+      }
+    },
+    "profile_env": {
+      "client": [
+        "GGML_RPC_NO_HASH_CACHE=1",
+        "GGML_RPC_NO_GRAPH_CACHE=1",
+        "GGML_CUDA_DISABLE_GRAPHS=1"
+      ],
+      "worker": [
+        "GGML_CUDA_DISABLE_GRAPHS=1"
+      ]
+    },
+    "profile_flags": [
+      "--fit off",
+      "--flash-attn on",
+      "--parallel 1",
+      "-b 128",
+      "-ub 64",
+      "--cache-ram 0",
+      "--ctx-checkpoints 0",
+      "--no-context-shift"
+    ],
+    "not_an_automatically_imported_gui_preset": true,
+    "matched_startup_speedup_percent": 46.84385701181002
+  },
+  "tests": {
+    "cli": 138,
+    "desktop": 41,
+    "desktop_netplan_cases_verified_on_ubuntu_system_python": 2,
+    "cpp_alignment_cases": [
+      512,
+      4096,
+      65536
+    ],
+    "actual_directio_read_checksum_matches": true,
+    "unchanged_model_weights_and_kv_precision": true,
+    "native_tabs": 6,
+    "native_languages": 4,
+    "native_ui_passed": true,
+    "installed_menu_launcher_passed": true,
+    "saved_policy_runtime_smoke_passed": true
+  },
+  "limits": [
+    "Two physical devices only",
+    "Mistral maximum is text-only, one slot",
+    "Synthetic repetitive input; no coding-quality benchmark",
+    "No exact universal memory ceiling claimed",
+    "Intermediate unpadded adapter was rejected after a crash; final code includes alignment slack"
+  ],
+  "final_state": {
+    "model_unloaded": true,
+    "studio_health_http": 200,
+    "studio_service_active_enabled": true,
+    "rpc_service_active_enabled": true,
+    "refresh_watcher_active_enabled": true,
+    "worker_default_cuda_graph_environment_restored": true,
+    "experimental_worker_receipt_removed": true,
+    "original_custom_delegate_sha256": "cddb6aec3304021e2a759cca302ed952c95b809eb422b59f6e4561859e4da59e",
+    "available_memory_gib_approx": {
+      "primary": 116,
+      "worker": 117
+    }
+  }
+}

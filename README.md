@@ -4,9 +4,11 @@
 
 ## Native Spark Link application
 
-A separate native app with a 3D cable editor, installation and update controls is available. It does not require the installed CLI. [Desktop instructions](desktop/README.md) · [Download the app](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.1.0).
+A separate native app with a 3D cable editor, installation and update controls is available. It does not require the installed CLI. [Desktop instructions](desktop/README.md) · [Download the app](https://github.com/grosa787/connect-dual-spark-for-unsloth-studio/releases/tag/desktop-v1.1.1).
 
 **Latest verified runtime:** Unsloth 2026.10.11 + llama.cpp b11985-mix-c116c32. The two-Spark Q8/1048576-context text and vision checks passed. [Update results and commands](docs/runtime-update-2026-10-31.md).
+
+**New in CLI 0.6.1 / Spark Link 1.1.1:** model-independent asynchronous RPC weight loading. Matched Q8 startup improved from 165.2 to 96.3 seconds without changing weights or F16 KV. [Startup measurements and Mistral memory investigation](docs/startup-and-mistral-2026-10-31.md).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/grosa787/connect-dual-spark-for-unsloth-studio/main/desktop/install-desktop.sh | bash
@@ -20,7 +22,7 @@ Choose **English / Русский** at the top of this page for documentation an
 
 Connect Dual Spark automatically discovers the direct ConnectX-7 link between exactly two NVIDIA DGX Spark systems, installs Unsloth Studio, and configures `llama.cpp` RPC on the second Spark. Inter-node model traffic is allowed only over the verified high-speed ConnectX-7 interface.
 
-> **Pre-release status:** Version 0.6.0 has measured fastload results on the reference DGX Spark pair and passes automated checks, but a complete clean installation of this release still needs validation on physical hardware. Test the prerelease on the target pair before production use.
+> **Pre-release status:** Version 0.6.1 has measured fastload results on the reference DGX Spark pair and passes automated checks, but a complete clean installation of this release still needs validation on physical hardware. Test the prerelease on the target pair before production use.
 
 Standalone operation is available only after a successful installation and pairing of two Sparks. The initial installation still requires both systems and their direct ConnectX-7 link. Later, if every local ConnectX-7 interface has no carrier, the guarded `llama-server` can run on the primary Spark alone and lets Unsloth/`llama.cpp` fit the model to the available local memory. This does not guarantee that a model sized for two Sparks will fit on one.
 
@@ -85,7 +87,7 @@ The source launcher is intended for development and requires the adjacent `dual_
 ## Build the self-contained `.run` release
 
 ```bash
-./scripts/build_run.sh 0.6.0
+./scripts/build_run.sh 0.6.1
 ./dist/Connect-Dual-Spark-arm64.run --verify
 ```
 
@@ -96,8 +98,8 @@ The build script packages the current `dual_spark` module, removes Python caches
 The Debian package targets the `arm64` architecture:
 
 ```bash
-./scripts/build_deb.sh 0.6.0
-sudo apt install ./dist/connect-dual-spark_0.6.0_arm64.deb
+./scripts/build_deb.sh 0.6.1
+sudo apt install ./dist/connect-dual-spark_0.6.1_arm64.deb
 ```
 
 After installation, launch **Connect Dual Spark** from the application menu or run:
