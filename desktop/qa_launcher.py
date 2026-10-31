@@ -16,9 +16,13 @@ pid=None
 try:
     for _ in range(100):
         if lock.exists():
-            pid=int(lock.read_text().splitlines()[0])
-            tree=subprocess.check_output(['xwininfo','-root','-tree'],text=True)
-            if 'Spark Link' in tree: break
+            candidate=int(lock.read_text().splitlines()[0])
+            try: command=Path(f'/proc/{candidate}/cmdline').read_bytes()
+            except FileNotFoundError: command=b''
+            if b'spark_link' in command and b'/spark-link/' in command:
+                pid=candidate
+                tree=subprocess.check_output(['xwininfo','-root','-tree'],text=True)
+                if 'Spark Link' in tree: break
         time.sleep(0.2)
     else: raise AssertionError('Desktop launcher did not create a Spark Link window.')
     command=Path(f'/proc/{pid}/cmdline').read_bytes()
